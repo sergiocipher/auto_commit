@@ -86,3 +86,33 @@ have not solved today (e.g. `4A`).
 3. Sanitize (remove `csrf_token`, cookies, handles if desired) before sharing.
 4. Look for `[submission-tracker]` messages in the page console if a capture
    was skipped.
+
+## CodeChef
+
+Log in to www.codechef.com in the same Chrome profile. Use the problem page's
+built-in editor (e.g. `/problems/FLOW001`).
+
+| #   | Step                                                                          | Expected                                                                                                                                                                                     |
+| --- | ----------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| H1  | Submit a **wrong** answer.                                                    | Popup: last verdict "Wrong Answer"; nothing uploaded.                                                                                                                                        |
+| H2  | Submit an **accepted** solution and keep the tab open until "Correct Answer". | "Upload successful"; repo has `data/codechef/flow001-add-two-numbers/solution.<ext>` + `metadata.json` in one commit `feat(solutions): add CodeChef - FLOW001 Add Two Numbers (<Language>)`. |
+| H3  | Compare the file with your code byte for byte.                                | Identical. **If not** (e.g. line endings differ), report it: `submission-code` may normalize code.                                                                                           |
+| H4  | A problem with subtasks: get a **partially** correct result.                  | Nothing uploaded.                                                                                                                                                                            |
+| H5  | Submit inside a contest (`/<CONTEST>/problems/<CODE>`).                       | Uploads with `contest.kind = "contest"` in `metadata.json`.                                                                                                                                  |
+| H6  | Open an old submission (`/viewsolution/<id>`) or "My Submissions".            | Nothing uploaded.                                                                                                                                                                            |
+| H7  | Submit, then reload the page before the verdict arrives.                      | Not captured (known limitation; force upload in stage 5).                                                                                                                                    |
+
+### Confirm the endpoints (needed to move CodeChef to `verified`)
+
+The endpoints were read from CodeChef's public client code; the responses
+have not been seen with a real account. In DevTools → Network while doing H2:
+
+1. `POST /api/ide/submit`: the response contains `upid`.
+2. `GET /api/ide/submit?solution_id=<upid>`: a final response has
+   `result_code: "accepted"`.
+3. In the console on the same page, run
+   `await (await fetch('/api/submission-code/<upid>', {headers: {'X-Requested-With': 'XMLHttpRequest', 'x-csrf-token': window.csrfToken}})).json()`
+   and check that `data.code` is your exact code.
+4. `GET /api/ide/PRACTICE/languages/<CODE>`: entries have `id`,
+   `short_name` and `full_name`, and the `id` matches the submitted `language`.
+5. Sanitize before sharing: remove `csrfToken`, cookies and usernames.

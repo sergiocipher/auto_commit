@@ -231,3 +231,28 @@ Codeforces parsing needs a DOM, so its test files opt into happy-dom
 (`// @vitest-environment happy-dom`); other tests stay in Node. A
 `.gitattributes` rule marks `packages/*/test/fixtures/**` as `-text` so git
 never rewrites line endings in byte-exact fixtures.
+
+## 2026-10-27 — CodeChef endpoints from public client code
+
+CodeChef serves its pages and JS bundles publicly (200 to plain clients),
+so its endpoints were found by reading the downloaded client code rather
+than guessed: `POST /api/ide/submit`, polling
+`GET /api/ide/submit?solution_id=`, `result_code` values and labels,
+`/api/submission-code/<id>` → `data.code`, and the problem and language
+APIs. Response shapes beyond the fields the client reads remain
+assumptions, so the adapter stays "implemented, unverified". See
+[platforms/codechef.md](platforms/codechef.md).
+
+## 2026-10-27 — CodeChef capture design
+
+- Only submissions whose submit request was seen on the same page are
+  uploaded. Poll results for other IDs are displayed, never uploaded, so
+  forged page messages and history browsing cannot trigger uploads.
+- `partial_accepted` is not accepted. Unknown `result_code` values stay
+  PENDING (never upload) rather than guessing.
+- CodeChef's own headers (`x-csrf-token` from `window.csrfToken`,
+  `x-cc-ide-key` from `window.ccIdeSkipToken`) are relayed by the page hook
+  and reused only for the page's own same-origin requests. They are already
+  visible to every page script, are never stored or logged, and never leave
+  the content script.
+- Assessment-preview submits are ignored.

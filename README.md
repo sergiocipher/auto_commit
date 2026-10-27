@@ -4,9 +4,10 @@ Chrome (MV3) extension + self-hosted Docker backend that uploads your first
 **Accepted** solution per problem (per configurable period) from LeetCode,
 Codeforces and CodeChef to your GitHub repo under `data/`.
 
-> Status: **under construction**. Stages 0–3 complete: local-mode upload to
-> GitHub plus the LeetCode and Codeforces adapters (tested against a fake
-> GitHub and synthetic platform payloads; not yet run against the live sites). See
+> Status: **under construction**. Stages 0–4 complete: local-mode upload to
+> GitHub plus LeetCode, Codeforces and CodeChef adapters (tested against a
+> fake GitHub and synthetic platform payloads; not yet run against the live
+> sites). See
 > [AGENT_PROMPT.md](AGENT_PROMPT.md) for the specification,
 > [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and
 > [docs/DECISIONS.md](docs/DECISIONS.md).

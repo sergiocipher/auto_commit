@@ -1,0 +1,8 @@
+{
+  "_synthetic": true,
+  "_note": "Built around the fields CodeChef's IDE client reads (docs/platforms/codechef.md); other fields assumed.",
+  "status": "error",
+  "errors": [
+    "You can make only one submission in 30 seconds."
+  ]
+}

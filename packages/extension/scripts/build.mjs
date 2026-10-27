@@ -9,6 +9,8 @@ const contentScripts = {
   leetcode: "src/content/leetcode.ts",
   "leetcode-main": "src/content/leetcode-main.ts",
   codeforces: "src/content/codeforces.ts",
+  codechef: "src/content/codechef.ts",
+  "codechef-main": "src/content/codechef-main.ts",
 };
 
 await build({ root, configFile: resolve(root, "vite.config.ts"), logLevel: "warn" });

@@ -1,0 +1,11 @@
+{
+  "_synthetic": true,
+  "_note": "Built around the fields CodeChef's IDE client reads (docs/platforms/codechef.md); other fields assumed.",
+  "status": "OK",
+  "data": {
+    "code": "#include <bits/stdc++.h>\r\nusing namespace std;\r\nint main() {\r\n\tint t; cin >> t;  \r\n\twhile (t--) { long long a, b; cin >> a >> b; cout << a + b << \"\\n\"; } // ✓ é\r\n}\r\n",
+    "language": {
+      "short_name": "C++17"
+    }
+  }
+}

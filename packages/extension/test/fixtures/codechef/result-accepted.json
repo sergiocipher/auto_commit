@@ -1,0 +1,9 @@
+{
+  "_synthetic": true,
+  "_note": "Built around the fields CodeChef's IDE client reads (docs/platforms/codechef.md); other fields assumed.",
+  "upid": "1100223344",
+  "result_code": "accepted",
+  "time": "0.01",
+  "mem": "1.5M",
+  "score": "100"
+}
