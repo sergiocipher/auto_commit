@@ -25,3 +25,6 @@ export function platformForUrl(url: string | undefined): Platform | null {
 export function submissionKey(platform: Platform, submissionId: string): string {
   return `${platform}:${submissionId}`;
 }
+
+/** GitHub origins requested at "Connect GitHub" time via optional_host_permissions. */
+export const GITHUB_ORIGINS = ["https://github.com/*", "https://api.github.com/*"];

@@ -5,8 +5,8 @@ import react from "@vitejs/plugin-react";
 const root = import.meta.dirname;
 
 // Pages (popup/options) and the module service worker share one build.
-// Content scripts cannot be ES modules, so they get separate IIFE builds
-// once adapters exist (stage 2+).
+// Content scripts cannot be ES modules; scripts/build.mjs builds each of
+// them separately as a single-file IIFE.
 export default defineConfig({
   root,
   plugins: [react()],

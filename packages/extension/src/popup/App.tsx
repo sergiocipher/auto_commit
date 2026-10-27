@@ -9,7 +9,13 @@ export function App() {
       <h1>Submission Tracker</h1>
       {error && <p className="detail">{error}</p>}
       {state ? (
-        <StatusPanel state={state} onRetry={(key) => void api.retry(key).then(refresh)} />
+        <StatusPanel
+          state={state}
+          onRetry={(key) => void api.retry(key).then(refresh)}
+          onRetryUpload={(platform, id) =>
+            void api.retryUpload(platform, id).then(refresh, refresh)
+          }
+        />
       ) : (
         <p>Loading…</p>
       )}

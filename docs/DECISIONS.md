@@ -135,3 +135,82 @@ settings can be added later if wanted.
 `http://127.0.0.1/*` and `http://localhost/*` (match patterns ignore the
 port) are declared now so the backend sink needs no permission change in
 stage 6. No `<all_urls>`, cookies, tabs or history permissions.
+
+## 2026-10-27 — Core upload pipeline shared by extension and backend
+
+`packages/core` holds the dedup engine (`ingestSubmission`, `retryJob`), the
+job processor (`processJob`), the Git Data API uploader, the device-flow
+client and error classification. They depend only on injected `fetch`,
+clock and a `DedupStore`. The extension uses `KeyValueJobStore` over
+chrome.storage; the backend will implement `DedupStore` with Postgres and
+`pg_advisory_xact_lock`. Both get identical decisions.
+
+## 2026-10-27 — Upload algorithm details
+
+- Existing files are found via the Contents API **directory listing** at the
+  exact head commit (read-only use; writes stay on the Git Data API). Blob
+  SHAs are compared with a locally computed git blob SHA-1, so identical
+  content needs no download.
+- After creating the blob, its SHA returned by GitHub must equal the local
+  one; otherwise the upload aborts (proves GitHub stored our exact bytes).
+- Identical content at the default or suffixed path → SUCCESS without a
+  commit, recording the last commit that touched the file.
+- Default taken by different content → `solution-<submissionId>.<ext>`; if
+  that also exists with different content → permanent error (never
+  overwrite).
+- Ref update uses `force: false`; 409/422 → rebuild from the new head, at
+  most 3 retries, then a retryable "conflict" error.
+- `metadata.json` (`schemaVersion: 1`) keeps unknown/user fields, keys
+  solutions by `<languageNormalized>:<submissionId>`, refuses folders whose
+  metadata names another problem, and is left untouched (with a warning on
+  the job) when it is not valid JSON.
+
+## 2026-10-27 — Retry and status rules
+
+- 401 → `NEEDS_AUTH` (job kept; resumed automatically after reconnect).
+- 429, or 403 with rate-limit headers/message → `RETRYING` at the hinted
+  time **without** consuming an attempt.
+- Network/5xx/exhausted ref conflicts → exponential backoff (10 s doubling,
+  cap 1 h, jitter), `FAILED_PERMANENT` after 6 attempts (configurable).
+- 403 otherwise, 404, 422, unsupported language, missing repo, path
+  problems → `FAILED_PERMANENT` with an actionable, token-redacted message.
+- Manual retry re-checks eligibility for failed jobs (their reservation was
+  released) unless the job was forced.
+- Reservations: `RECEIVED/QUEUED/UPLOADING/RETRYING/NEEDS_AUTH` block the
+  window like `SUCCESS` does; `FAILED_PERMANENT` and skipped records do not.
+- Source code is purged from the job on SUCCESS (default).
+
+## 2026-10-27 — GitHub access in local mode via optional host permissions
+
+Local mode needs `https://github.com/*` (device-flow endpoints send no CORS
+headers) and `https://api.github.com/*`. They are declared as
+`optional_host_permissions` and requested only when the user clicks
+"Connect GitHub", so a default install still has access only to the three
+platforms and localhost. Without the grant, jobs report "GitHub is not
+connected" (`NEEDS_AUTH`). OAuth Apps only support classic scopes; the
+default is `repo` (needed for private repos). `public_repo` would suffice
+for a public solutions repo but is not exposed yet.
+
+## 2026-10-27 — OAuth client ID is build-time configuration
+
+`VITE_GITHUB_CLIENT_ID` is read from `packages/extension/.env.local`
+(gitignored) and inlined at build time. The client ID is public by design
+(device flow has no secret), but keeping it out of git lets other users of
+the repo register their own OAuth App.
+
+## 2026-10-27 — Per-package test tsconfigs
+
+`src` is typechecked with only the runtime's types (no DOM in core, no Node
+in the extension). Tests get `tsconfig.test.json` with the extra types they
+need (DOM for the fake GitHub, Node for reading fixtures), so test-only
+types cannot leak into shipped code.
+
+## 2026-10-27 — LeetCode capture design
+
+See [platforms/leetcode.md](platforms/leetcode.md). The page-world hook only
+relays `/check/` bodies. Source code is always fetched by submission ID through
+the authenticated same-origin GraphQL API and cross-checked against the judged
+submission, the page's problem and the language. The URL-based fallback only
+uploads submissions younger than 15 minutes. Live probing was not done: plain
+requests get a 403, and disguising a client to pass the bot check was rejected
+as inappropriate.

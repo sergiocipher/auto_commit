@@ -4,8 +4,9 @@ Chrome (MV3) extension + self-hosted Docker backend that uploads your first
 **Accepted** solution per problem (per configurable period) from LeetCode,
 Codeforces and CodeChef to your GitHub repo under `data/`.
 
-> Status: **under construction**. Stages 0 (foundation) and 1 (extension shell) complete;
-> no platform adapter or upload path exists yet. See
+> Status: **under construction**. Stages 0–2 complete: local-mode upload to
+> GitHub and the LeetCode adapter (tested against a fake GitHub and synthetic
+> LeetCode payloads; not yet run against the live site). See
 > [AGENT_PROMPT.md](AGENT_PROMPT.md) for the specification,
 > [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and
 > [docs/DECISIONS.md](docs/DECISIONS.md).
@@ -30,8 +31,20 @@ npm test
 ### Extension
 
 ```bash
+cp packages/extension/.env.example packages/extension/.env.local
+# set VITE_GITHUB_CLIENT_ID to your OAuth App's client ID (Device Flow enabled)
 npm -w @cst/extension run build     # outputs packages/extension/dist
 ```
+
+First run: open the extension's **Settings**, click **Connect GitHub**
+(Chrome asks for access to github.com and api.github.com), enter the code
+shown on github.com/login/device, then pick your **solutions** repository
+and branch. Full checklist: [docs/MANUAL_E2E.md](docs/MANUAL_E2E.md).
+
+**Privacy (local mode):** your GitHub token is stored in the extension's
+local storage and read only by its service worker, never by page scripts or
+the popup. Accepted source code is kept in the extension until GitHub
+confirms the commit, then deleted from the job. Code goes only to GitHub.
 
 Load it: open `chrome://extensions`, enable **Developer mode**, click
 **Load unpacked** and select `packages/extension/dist`.

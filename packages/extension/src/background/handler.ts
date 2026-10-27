@@ -1,10 +1,31 @@
-import { problemFolder, type Settings, type SubmissionEvent } from "@cst/shared";
+import type { UploadJob } from "@cst/core";
+import { problemFolder, type Platform, type Settings, type SubmissionEvent } from "@cst/shared";
 import { ContentMessageSchema, PageMessageSchema, type Reply } from "../messages.js";
 import { platformForUrl } from "../platforms.js";
 import type { ActivityEntry, ActivityLog } from "./activity.js";
+import type { ConnectProgress, GitHubStatus, RepoSummary } from "./githubAuth.js";
 import type { Outbox } from "./outbox.js";
 import { classifySender } from "./senders.js";
 import type { SettingsStore } from "./settings.js";
+
+/** GitHub connection operations; implemented by GitHubAuth in local mode. */
+export interface GitHubService {
+  status(): Promise<GitHubStatus>;
+  start(): Promise<ConnectProgress>;
+  poll(): Promise<ConnectProgress>;
+  disconnect(): Promise<void>;
+  repos(): Promise<RepoSummary[]>;
+  branches(owner: string, name: string): Promise<string[]>;
+}
+
+/** Upload-job operations; implemented by LocalUploader in local mode. */
+export interface UploadService {
+  retry(platform: Platform, submissionId: string): Promise<UploadJob | undefined>;
+  /** Resume jobs that were waiting for GitHub auth. */
+  onConnected(): Promise<void>;
+  /** Removes stored jobs (part of "clear local data"). */
+  clear(): Promise<void>;
+}
 
 export interface HandlerDeps {
   extensionId: string;
@@ -13,7 +34,9 @@ export interface HandlerDeps {
   settings: SettingsStore;
   now: () => number;
   sha256: (text: string) => Promise<string>;
-  /** Kicks off delivery of due outbox items (fire-and-forget). */
+  github: GitHubService;
+  uploads: UploadService;
+  /** Kicks off delivery of due outbox items and due uploads (fire-and-forget). */
   requestDrain: () => void;
 }
 
@@ -30,6 +53,7 @@ export interface OutboxSummary {
 
 export interface PopupState {
   settings: Settings;
+  github: GitHubStatus;
   activity: ActivityEntry[];
   outbox: OutboxSummary[];
 }
@@ -58,6 +82,21 @@ async function rejectReason(
     return "Source code hash mismatch; the code may have been altered or truncated.";
   }
   return null;
+}
+
+/**
+ * GitHub operations fail with our own (already redacted) messages, which
+ * are useful to show; anything else stays generic.
+ */
+async function userFacing<T>(fn: () => Promise<T>): Promise<Reply<T>> {
+  try {
+    return { ok: true, data: await fn() };
+  } catch (err) {
+    const known =
+      err instanceof Error &&
+      (err.name === "UploadError" || err.message === "GitHub is not connected.");
+    return { ok: false, error: known ? err.message : "GitHub request failed." };
+  }
 }
 
 export function createMessageHandler(deps: HandlerDeps) {
@@ -100,10 +139,11 @@ export function createMessageHandler(deps: HandlerDeps) {
       const msg = parsed.data;
       switch (msg.type) {
         case "state/get": {
-          const [settings, activity, items] = await Promise.all([
+          const [settings, activity, items, github] = await Promise.all([
             deps.settings.get(),
             deps.activity.list(),
             deps.outbox.list(),
+            deps.github.status(),
           ]);
           const outbox: OutboxSummary[] = items.map((i) => ({
             key: i.key,
@@ -114,7 +154,7 @@ export function createMessageHandler(deps: HandlerDeps) {
             nextAttemptAt: i.nextAttemptAt,
             lastError: i.lastError,
           }));
-          return { ok: true, data: { settings, activity, outbox } satisfies PopupState };
+          return { ok: true, data: { settings, github, activity, outbox } satisfies PopupState };
         }
         case "settings/update":
           return { ok: true, data: await deps.settings.set(msg.settings) };
@@ -123,8 +163,31 @@ export function createMessageHandler(deps: HandlerDeps) {
           deps.requestDrain();
           return { ok: true, data: undefined };
         case "data/clear":
-          await Promise.all([deps.outbox.clear(), deps.activity.clear()]);
+          await Promise.all([deps.outbox.clear(), deps.activity.clear(), deps.uploads.clear()]);
           return { ok: true, data: undefined };
+        case "upload/retry": {
+          const job = await deps.uploads.retry(msg.platform, msg.submissionId);
+          if (!job) return { ok: false, error: "No upload found for that submission." };
+          deps.requestDrain();
+          return { ok: true, data: job.status };
+        }
+        case "github/device/start":
+          return await userFacing(() => deps.github.start());
+        case "github/device/poll": {
+          const reply = await userFacing(() => deps.github.poll());
+          if (reply.ok && reply.data.state === "connected") {
+            await deps.uploads.onConnected();
+            deps.requestDrain();
+          }
+          return reply;
+        }
+        case "github/disconnect":
+          await deps.github.disconnect();
+          return { ok: true, data: undefined };
+        case "github/repos":
+          return await userFacing(() => deps.github.repos());
+        case "github/branches":
+          return await userFacing(() => deps.github.branches(msg.owner, msg.name));
       }
     } catch {
       // Never echo internals (which could include payload fragments) to callers.

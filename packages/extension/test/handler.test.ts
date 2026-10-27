@@ -4,6 +4,8 @@ import { ActivityLog } from "../src/background/activity.js";
 import { createMessageHandler, type PopupState } from "../src/background/handler.js";
 import { Outbox } from "../src/background/outbox.js";
 import { SettingsStore } from "../src/background/settings.js";
+import type { ConnectProgress } from "../src/background/githubAuth.js";
+import { UploadError, type UploadJob } from "@cst/core";
 import { contentSender, EXT_ID, makeEvent, MemoryStore, pageSender } from "./helpers.js";
 
 function setup() {
@@ -16,6 +18,24 @@ function setup() {
     now: () => 1_700_000_001_000,
     sha256: (t: string) => sha256Hex(t),
     requestDrain: vi.fn(),
+    github: {
+      status: vi.fn(async () => ({ connected: true, login: "octo", scopes: ["repo"] })),
+      start: vi.fn(async () => ({
+        state: "pending" as const,
+        userCode: "ABCD-1234",
+        verificationUri: "https://github.com/login/device",
+        retryInMs: 5000,
+      })),
+      poll: vi.fn(async (): Promise<ConnectProgress> => ({ state: "connected", login: "octo" })),
+      disconnect: vi.fn(async () => undefined),
+      repos: vi.fn(async () => []),
+      branches: vi.fn(async () => ["main"]),
+    },
+    uploads: {
+      retry: vi.fn(async (): Promise<UploadJob | undefined> => undefined),
+      onConnected: vi.fn(async () => undefined),
+      clear: vi.fn(async () => undefined),
+    },
   };
   return { deps, handle: createMessageHandler(deps), store };
 }
@@ -225,5 +245,92 @@ describe("extension page messages", () => {
       pageSender(),
     );
     expect(reply).toEqual({ ok: false, error: "Invalid message." });
+  });
+});
+
+describe("github and upload commands", () => {
+  it("never exposes the token in state", async () => {
+    const reply = await ctx.handle({ type: "state/get" }, pageSender());
+    expect((reply as { data: PopupState }).data.github).toEqual({
+      connected: true,
+      login: "octo",
+      scopes: ["repo"],
+    });
+  });
+
+  it("resumes waiting uploads once GitHub connects", async () => {
+    const reply = await ctx.handle({ type: "github/device/poll" }, pageSender("options.html"));
+    expect(reply).toEqual({ ok: true, data: { state: "connected", login: "octo" } });
+    expect(ctx.deps.uploads.onConnected).toHaveBeenCalledTimes(1);
+    expect(ctx.deps.requestDrain).toHaveBeenCalled();
+  });
+
+  it("does not resume while sign-in is still pending", async () => {
+    ctx.deps.github.poll.mockResolvedValueOnce({
+      state: "pending",
+      userCode: "X",
+      verificationUri: "https://github.com/login/device",
+      retryInMs: 5000,
+    });
+    await ctx.handle({ type: "github/device/poll" }, pageSender("options.html"));
+    expect(ctx.deps.uploads.onConnected).not.toHaveBeenCalled();
+  });
+
+  it("passes our own GitHub error messages through, hides others", async () => {
+    ctx.deps.github.start.mockRejectedValueOnce(
+      new UploadError("permanent", "GitHub refused device sign-in (device_flow_disabled)."),
+    );
+    expect(await ctx.handle({ type: "github/device/start" }, pageSender())).toEqual({
+      ok: false,
+      error: "GitHub refused device sign-in (device_flow_disabled).",
+    });
+    ctx.deps.github.repos.mockRejectedValueOnce(new Error("internal details"));
+    expect(await ctx.handle({ type: "github/repos" }, pageSender())).toEqual({
+      ok: false,
+      error: "GitHub request failed.",
+    });
+  });
+
+  it("validates branch-listing parameters", async () => {
+    expect(
+      await ctx.handle({ type: "github/branches", owner: "../x", name: "r" }, pageSender()),
+    ).toEqual({ ok: false, error: "Invalid message." });
+    expect(
+      await ctx.handle({ type: "github/branches", owner: "octo", name: "r" }, pageSender()),
+    ).toEqual({ ok: true, data: ["main"] });
+  });
+
+  it("retries an upload and reports unknown submissions", async () => {
+    expect(
+      await ctx.handle(
+        { type: "upload/retry", platform: "leetcode", submissionId: "1" },
+        pageSender(),
+      ),
+    ).toEqual({
+      ok: false,
+      error: "No upload found for that submission.",
+    });
+    ctx.deps.uploads.retry.mockResolvedValueOnce({ status: "QUEUED" } as UploadJob);
+    expect(
+      await ctx.handle(
+        { type: "upload/retry", platform: "leetcode", submissionId: "1" },
+        pageSender(),
+      ),
+    ).toEqual({ ok: true, data: "QUEUED" });
+  });
+
+  it("clear local data also clears stored upload jobs; disconnect deletes the token", async () => {
+    await ctx.handle({ type: "data/clear" }, pageSender());
+    expect(ctx.deps.uploads.clear).toHaveBeenCalledTimes(1);
+    await ctx.handle({ type: "github/disconnect" }, pageSender());
+    expect(ctx.deps.github.disconnect).toHaveBeenCalledTimes(1);
+  });
+
+  it("refuses GitHub commands from content scripts", async () => {
+    expect(await ctx.handle({ type: "github/device/start" }, contentSender())).toEqual({
+      ok: false,
+      error: "Invalid message.",
+    });
+    expect(ctx.deps.github.start).not.toHaveBeenCalled();
   });
 });

@@ -170,3 +170,21 @@ export function windowBounds(policy: PeriodPolicy, ts: number, timeZone: string)
         : { year: start.year, month: start.month + 1, day: 1 };
   return { start: startOfLocalDay(start, timeZone), end: startOfLocalDay(next, timeZone) };
 }
+
+/** Human-readable policy description, e.g. for "already uploaded" messages. */
+export function describePeriod(p: PeriodPolicy): string {
+  switch (p.kind) {
+    case "calendar_day":
+      return "once per calendar day";
+    case "rolling_24h":
+      return "once per rolling 24 hours";
+    case "calendar_week":
+      return `once per week starting ${p.weekStartsOn === 0 ? "Sunday" : "Monday"}`;
+    case "calendar_month":
+      return "once per calendar month";
+    case "permanent":
+      return "first accepted solution only";
+    case "custom_hours":
+      return `once per ${p.hours} hours`;
+  }
+}

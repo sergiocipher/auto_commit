@@ -9,6 +9,7 @@ import type { KeyValueStore } from "../storage.js";
 import { createSerialLock } from "../lock.js";
 import { submissionKey } from "../platforms.js";
 import type { VerdictObserved } from "../messages.js";
+import type { UploadJob } from "@cst/core";
 import type { DeliveryReport } from "./outbox.js";
 
 export const ACTIVITY_STORAGE_KEY = "activity:v1";
@@ -28,6 +29,8 @@ export const ActivityEntrySchema = z.object({
   /** Status reported by the sink; absent until the sink has taken the event. */
   status: UploadStatusSchema.optional(),
   detail: z.string().optional(),
+  commitSha: z.string().optional(),
+  filePath: z.string().optional(),
   updatedAt: z.number(),
 });
 export type ActivityEntry = z.infer<typeof ActivityEntrySchema>;
@@ -117,6 +120,27 @@ export class ActivityLog {
         return { ...base, status: "FAILED_PERMANENT", detail: result.error };
       return { ...base, queued: true, detail: result.error };
     });
+  }
+
+  /** Mirrors an upload job's state (local uploader or, later, the backend). */
+  recordJob(job: UploadJob, now: number): Promise<void> {
+    const key = submissionKey(job.platform, job.submissionId);
+    return this.update(key, now, (e) => ({
+      ...e,
+      key,
+      platform: job.platform,
+      submissionId: job.submissionId,
+      verdict: "ACCEPTED",
+      problemKey: job.problemKey,
+      problemTitle: job.problemTitle,
+      language: job.language,
+      queued: false,
+      status: job.status,
+      detail: job.lastError,
+      commitSha: job.commitSha,
+      filePath: job.filePath,
+      updatedAt: now,
+    }));
   }
 
   list(): Promise<ActivityEntry[]> {

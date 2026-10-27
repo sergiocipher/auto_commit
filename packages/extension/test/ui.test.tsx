@@ -60,6 +60,7 @@ describe("StatusPanel", () => {
         repo: { owner: "", name: "", branch: "main" },
         languageExtensionOverrides: {},
       },
+      github: { connected: false },
       activity: [
         entry({
           problemTitle: '<img src=x onerror="alert(1)">',
