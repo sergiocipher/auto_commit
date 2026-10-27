@@ -81,3 +81,57 @@ explicit opt-in documented as less secure.
 `scripts/check-secrets.sh` greps the staged diff for GitHub token prefixes,
 private-key headers and a non-empty `APP_ENCRYPTION_KEY=` assignment; it runs
 in `pre-commit` and supports `--all` for the tracked tree.
+
+## 2026-10-27 — Extension build: plain Vite, no CRX plugin
+
+One Vite build produces the popup, options page and the service worker
+(declared `"type": "module"`, so shared chunks are fine there). Content
+scripts cannot be ES modules; they will get separate single-file IIFE builds
+when the first adapter lands (stage 2). Alternative: `@crxjs/vite-plugin`
+(handles this automatically, but adds a dependency whose Vite 8 support was
+unverified).
+
+## 2026-10-27 — Real-browser smoke test via raw CDP
+
+`packages/extension/scripts/smoke.mjs` launches Chrome for Testing /
+Chromium with `--load-extension`, waits for the service worker target and
+drives the popup through the DevTools protocol using Node's built-in
+WebSocket (no Puppeteer/Playwright dependency). Branded Google Chrome
+ignores `--load-extension`, so `CHROME_PATH` must point at a Chrome for
+Testing or Chromium binary.
+
+## 2026-10-27 — Outbox semantics
+
+- Only `ACCEPTED`, hash-verified events with a safe slug enter the outbox.
+- Transient delivery failures retry indefinitely with exponential backoff
+  (5 s doubling, capped at 30 min, 50–100 % jitter); `Retry-After` hints win
+  when longer. "Bounded" refers to the delay, so a pending upload is never
+  dropped after N attempts.
+- A full outbox (200 items) refuses new events with an error rather than
+  evicting pending ones.
+- A bounded "seen" list (2,000 keys) suppresses re-emitted submissions even
+  after delivery; the authoritative dedup lives in the sink/backend.
+- Wake-ups use `chrome.alarms` (30 s minimum), and every service-worker
+  start drains whatever is due, so restarts lose nothing.
+
+## 2026-10-27 — Message trust model
+
+The service worker accepts messages only from this extension's own pages
+(`chrome-extension://<id>/…`) or from top-frame content scripts on the exact
+platform hosts (`https://leetcode.com`, `https://codeforces.com`,
+`https://www.codechef.com`/`codechef.com`). Content and page message sets
+are disjoint, all schemas are strict (unknown fields rejected), an event's
+platform must match the sending page, and the source hash is recomputed.
+Errors returned to callers are fixed strings, never payload fragments.
+
+## 2026-10-27 — "Clear local data" keeps settings
+
+Clearing removes the outbox, the seen cache and the activity history.
+Settings are kept so the user does not have to reconfigure; resetting
+settings can be added later if wanted.
+
+## 2026-10-27 — Host permissions for the local backend
+
+`http://127.0.0.1/*` and `http://localhost/*` (match patterns ignore the
+port) are declared now so the backend sink needs no permission change in
+stage 6. No `<all_urls>`, cookies, tabs or history permissions.

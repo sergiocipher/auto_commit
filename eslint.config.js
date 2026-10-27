@@ -1,6 +1,7 @@
 import js from "@eslint/js";
 import tseslint from "typescript-eslint";
 import prettier from "eslint-config-prettier";
+import globals from "globals";
 
 export default tseslint.config(
   { ignores: ["**/dist/**", "**/coverage/**", "**/node_modules/**"] },
@@ -18,6 +19,10 @@ export default tseslint.config(
       sourceType: "commonjs",
       globals: { module: "writable", require: "readonly" },
     },
+  },
+  {
+    files: ["**/scripts/**/*.mjs"],
+    languageOptions: { globals: globals.node },
   },
   {
     // shared and core must stay environment-agnostic (see AGENT_PROMPT §3).
