@@ -1,21 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { KeyValueJobStore } from "@cst/core";
-import { FakeGitHub, FAKE_TOKEN as TOKEN } from "@cst/core/testing";
-import { sha256Hex } from "@cst/shared";
 import { createLeetCodeAdapter } from "../src/adapters/leetcode/adapter.js";
 import { LEETCODE_CHECK_CHANNEL } from "../src/adapters/leetcode/channel.js";
-import { ActivityLog } from "../src/background/activity.js";
-import { GitHubAuth, GITHUB_TOKEN_KEY } from "../src/background/githubAuth.js";
-import { createMessageHandler } from "../src/background/handler.js";
-import { LocalUploader } from "../src/background/localUploader.js";
-import { Outbox } from "../src/background/outbox.js";
-import { SettingsStore } from "../src/background/settings.js";
 import { postToIsolated } from "../src/content/bridge.js";
 import { runAdapter } from "../src/content/runner.js";
 import { deriveStatus } from "../src/ui/status.js";
 import { fakeWindow, flush } from "./fakeWindow.js";
 import { fixture } from "./fixtures.js";
-import { contentSender, EXT_ID, MemoryStore } from "./helpers.js";
+import { createPipeline } from "./pipeline.js";
 
 const lc = (name: string) => fixture("leetcode", name) as Record<string, unknown>;
 
@@ -33,65 +24,7 @@ function variant(id: string, opts: { code?: string; lang?: string; timestamp?: n
 }
 
 async function setup() {
-  const gh = new FakeGitHub();
-  const store = new MemoryStore();
-  let now = 1_700_000_005_000;
-  const settings = new SettingsStore(store, () => "UTC");
-  await settings.set({
-    ...settings.defaults(),
-    repo: { owner: "octo", name: "solutions", branch: "main" },
-  });
-  await store.set(GITHUB_TOKEN_KEY, {
-    token: TOKEN,
-    scopes: ["repo"],
-    login: "octo",
-    connectedAt: 0,
-  });
-  const auth = new GitHubAuth(store, gh.fetch, "Ov23test", () => now);
-  const outbox = new Outbox(store);
-  const activity = new ActivityLog(store);
-  const jobs = new KeyValueJobStore(store);
-  let ids = 0;
-  const uploader = new LocalUploader({
-    jobs,
-    settings,
-    fetch: gh.fetch,
-    getToken: () => auth.getToken(),
-    now: () => now,
-    newId: () => `job-${++ids}`,
-    onJob: (job) => activity.recordJob(job, now),
-  });
-  const work = async () => {
-    for (const r of await outbox.drain(uploader.deliver, () => now))
-      await activity.recordDelivery(r, now);
-    await uploader.runDue();
-  };
-  let pending = Promise.resolve();
-  const handle = createMessageHandler({
-    extensionId: EXT_ID,
-    outbox,
-    activity,
-    settings,
-    now: () => now,
-    sha256: sha256Hex,
-    requestDrain: () => {
-      pending = pending.then(work);
-    },
-    github: {
-      status: () => auth.status(),
-      start: () => auth.start(),
-      poll: () => auth.poll(),
-      disconnect: () => auth.disconnect(),
-      repos: async () => [],
-      branches: async () => [],
-    },
-    uploads: {
-      retry: (p, s) => uploader.retry(p, s),
-      onConnected: () => uploader.resumeNeedsAuth(),
-      clear: () => jobs.clear(),
-    },
-  });
-
+  const p = await createPipeline();
   // One "tab" on a LeetCode problem page with the real adapter and runner.
   let details: unknown = lc("details-accepted.json");
   const win = fakeWindow("https://leetcode.com/problems/two-sum/");
@@ -105,14 +38,14 @@ async function setup() {
         json: async () => (q.includes("submissionDetails") ? details : lc("question-title.json")),
       };
     },
-    now: () => now,
+    now: p.now,
     csrfToken: () => undefined,
     urlPollMs: 60_000,
   });
   runAdapter(
     adapter,
     win.location.href,
-    (m) => handle(m, contentSender("https://leetcode.com/problems/two-sum/")),
+    p.sender("https://leetcode.com/problems/two-sum/"),
     new AbortController().signal,
   );
 
@@ -123,9 +56,9 @@ async function setup() {
       body: check,
     });
     await flush(20);
-    await pending;
+    await p.settle();
   };
-  return { gh, activity, jobs, submit, advance: (ms: number) => (now += ms) };
+  return { gh: p.gh, activity: p.activity, jobs: p.jobs, submit, advance: p.advance };
 }
 
 describe("LeetCode -> GitHub (mocked GitHub, synthetic LeetCode payloads)", () => {
