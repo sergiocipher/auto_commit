@@ -1,0 +1,2 @@
+# Fixtures hold byte-exact source code (CRLF, trailing spaces): never normalize.
+packages/*/test/fixtures/** -text

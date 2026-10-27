@@ -1,0 +1,8 @@
+{
+  "_synthetic": true,
+  "_note": "Shape of POST /data/submitSource as used by Codeforces' view-source popup; not recorded traffic.",
+  "source": "#include <bits/stdc++.h>\r\nusing namespace std;\r\n\r\nint main() {\r\n\tint w; cin >> w;  \r\n\t// \"even\" & > 2 → split é\r\n\tcout << (w > 2 && w % 2 == 0 ? \"YES\" : \"NO\") << '\\n';\r\n}\r\n",
+  "offerChallenge": "false",
+  "problemName": "Watermelon",
+  "verdict": "OK"
+}
