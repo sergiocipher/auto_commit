@@ -40,6 +40,17 @@
       "matches": ["https://codeforces.com/*"],
       "js": ["content/codeforces.js"],
       "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://www.codechef.com/*"],
+      "js": ["content/codechef-main.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": ["https://www.codechef.com/*"],
+      "js": ["content/codechef.js"],
+      "run_at": "document_start"
     }
   ],
   "optional_host_permissions": ["https://github.com/*", "https://api.github.com/*"]
