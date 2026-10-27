@@ -30,6 +30,20 @@ export const PageMessageSchema = z.discriminatedUnion("type", [
   z.strictObject({ type: z.literal("settings/update"), settings: SettingsSchema }),
   z.strictObject({ type: z.literal("outbox/retry"), key: z.string().min(1).max(200).optional() }),
   z.strictObject({ type: z.literal("data/clear") }),
+  z.strictObject({ type: z.literal("github/device/start") }),
+  z.strictObject({ type: z.literal("github/device/poll") }),
+  z.strictObject({ type: z.literal("github/disconnect") }),
+  z.strictObject({ type: z.literal("github/repos") }),
+  z.strictObject({
+    type: z.literal("github/branches"),
+    owner: z.string().regex(/^[A-Za-z0-9_.-]{1,100}$/),
+    name: z.string().regex(/^[A-Za-z0-9_.-]{1,100}$/),
+  }),
+  z.strictObject({
+    type: z.literal("upload/retry"),
+    platform: PlatformSchema,
+    submissionId: z.string().min(1).max(100),
+  }),
 ]);
 export type PageMessage = z.infer<typeof PageMessageSchema>;
 

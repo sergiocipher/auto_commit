@@ -6,7 +6,7 @@
   "scripts": {
     "build": "vite build",
     "smoke": "node scripts/smoke.mjs",
-    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.node.json"
+    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.test.json && tsc -p tsconfig.node.json"
   },
   "devDependencies": {
     "@types/chrome": "^0.3.6",
