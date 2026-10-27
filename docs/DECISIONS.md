@@ -214,3 +214,20 @@ submission, the page's problem and the language. The URL-based fallback only
 uploads submissions younger than 15 minutes. Live probing was not done: plain
 requests get a 403, and disguising a client to pass the bot check was rejected
 as inappropriate.
+
+## 2026-10-27 — Codeforces capture design
+
+See [platforms/codeforces.md](platforms/codeforces.md). Detection is a DOM
+observer on status tables, limited to the logged-in handle's rows. A history
+guard uploads only rows seen judging during the page view, or the newest own
+row right after a submit redirect, so opening a submissions page never
+bulk-uploads past solutions. Source comes from `/data/submitSource` (JSON,
+exact bytes) with a text-level fallback on the submission page; a DOM-based
+read was rejected because HTML parsing turns CRLF into LF.
+
+## 2026-10-27 — DOM tests with happy-dom, fixtures marked `-text`
+
+Codeforces parsing needs a DOM, so its test files opt into happy-dom
+(`// @vitest-environment happy-dom`); other tests stay in Node. A
+`.gitattributes` rule marks `packages/*/test/fixtures/**` as `-text` so git
+never rewrites line endings in byte-exact fixtures.

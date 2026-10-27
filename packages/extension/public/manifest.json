@@ -35,6 +35,11 @@
       "matches": ["https://leetcode.com/*"],
       "js": ["content/leetcode.js"],
       "run_at": "document_start"
+    },
+    {
+      "matches": ["https://codeforces.com/*"],
+      "js": ["content/codeforces.js"],
+      "run_at": "document_idle"
     }
   ],
   "optional_host_permissions": ["https://github.com/*", "https://api.github.com/*"]

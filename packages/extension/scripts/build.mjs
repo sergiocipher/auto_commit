@@ -8,6 +8,7 @@ const root = resolve(import.meta.dirname, "..");
 const contentScripts = {
   leetcode: "src/content/leetcode.ts",
   "leetcode-main": "src/content/leetcode-main.ts",
+  codeforces: "src/content/codeforces.ts",
 };
 
 await build({ root, configFile: resolve(root, "vite.config.ts"), logLevel: "warn" });
