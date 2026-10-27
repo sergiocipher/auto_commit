@@ -1,0 +1,26 @@
+# dependencies / build output
+node_modules/
+dist/
+build/
+coverage/
+.vite/
+.turbo/
+*.tsbuildinfo
+
+# secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# OS / editor / logs
+.DS_Store
+*.log
+npm-debug.log*
+
+# docker volumes, test artifacts, packaged extension
+.docker-data/
+test-results/
+*.zip
+*.crx
