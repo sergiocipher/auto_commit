@@ -24,3 +24,6 @@ npm-debug.log*
 test-results/
 *.zip
 *.crx
+agent.md 
+AGENT_PROMPT.md 
+
