@@ -24,6 +24,18 @@
     "page": "options.html",
     "open_in_tab": true
   },
-  "content_scripts": [],
+  "content_scripts": [
+    {
+      "matches": ["https://leetcode.com/*"],
+      "js": ["content/leetcode-main.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": ["https://leetcode.com/*"],
+      "js": ["content/leetcode.js"],
+      "run_at": "document_start"
+    }
+  ],
   "optional_host_permissions": ["https://github.com/*", "https://api.github.com/*"]
 }
