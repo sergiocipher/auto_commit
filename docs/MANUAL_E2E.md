@@ -59,3 +59,30 @@ The adapter was written without access to the live site (see
 6. In the extension's service-worker console (chrome://extensions → _service
    worker_) and the page console, look for `[submission-tracker]` messages
    explaining any skipped capture.
+
+## Codeforces
+
+Log in to codeforces.com in the same Chrome profile. Pick an easy problem you
+have not solved today (e.g. `4A`).
+
+| #   | Step                                                                                           | Expected                                                                                                                                                                                   |
+| --- | ---------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| C1  | Submit a **wrong** answer from the problem page; you land on `/contest/<id>/my`.               | Row goes "Running…" → "Wrong answer"; nothing uploaded.                                                                                                                                    |
+| C2  | Submit an **accepted** solution and stay on the "my" page until judged.                        | Popup ends at "Upload successful"; repo has `data/codeforces/4a-watermelon/solution.<ext>` + `metadata.json` in one commit `feat(solutions): add Codeforces - 4A Watermelon (<Language>)`. |
+| C3  | Compare the file with your code byte for byte.                                                 | Identical (including CRLF if you submitted from Windows).                                                                                                                                  |
+| C4  | Reload the "my" page.                                                                          | Nothing new is uploaded (old accepted rows are history).                                                                                                                                   |
+| C5  | Repeat C2 from `/problemset/problem/...`, a gym contest and (if you have one) a group contest. | Each uploads once into its own folder (`<contestId><index>-<title>`).                                                                                                                      |
+| C6  | Open `/contest/<id>/status` while someone else's submission is judged Accepted.                | Nothing uploaded.                                                                                                                                                                          |
+| C7  | Accepted again the same day for the same problem.                                              | "Already uploaded during this period".                                                                                                                                                     |
+
+### Capture real markup (needed to move Codeforces to `verified`)
+
+1. On `/contest/<id>/my`, right-click a row → **Inspect**, copy the `<tr>`
+   outer HTML while judging and after "Accepted". Compare with
+   `test/fixtures/codeforces/contest-my.html` (attributes `data-submission-id`,
+   `waiting`, `submissionVerdict`, classes `verdict-*`).
+2. DevTools → Network → click a submission ID (view-source popup) and look for
+   `POST /data/submitSource`. Copy the response JSON and check it has `source`.
+3. Sanitize (remove `csrf_token`, cookies, handles if desired) before sharing.
+4. Look for `[submission-tracker]` messages in the page console if a capture
+   was skipped.
