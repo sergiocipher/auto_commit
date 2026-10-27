@@ -3,3 +3,4 @@ export * from "./slug.js";
 export * from "./language.js";
 export * from "./commitMessage.js";
 export * from "./period.js";
+export * from "./hash.js";
