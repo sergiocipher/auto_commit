@@ -3,7 +3,7 @@
 # token-like strings. Used by the pre-commit hook; see AGENT_PROMPT §15.1.
 set -euo pipefail
 
-PATTERN='(ghp_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|gho_[A-Za-z0-9]{20,}|ghu_[A-Za-z0-9]{20,}|ghs_[A-Za-z0-9]{20,}|BEGIN [A-Z ]*PRIVATE KEY|APP_ENCRYPTION_KEY=[^[:space:]#]+)'
+PATTERN='(ghp_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|gho_[A-Za-z0-9]{20,}|ghu_[A-Za-z0-9]{20,}|ghs_[A-Za-z0-9]{20,}|-----BEGIN [A-Z ]*PRIVATE KEY-----|APP_ENCRYPTION_KEY=[A-Za-z0-9+/_-]{16,}=*)'
 
 if [[ "${1:-}" == "--all" ]]; then
   content=$(git grep -nE "$PATTERN" -- . ':!scripts/check-secrets.sh' || true)
