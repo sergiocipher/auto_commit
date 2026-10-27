@@ -1,0 +1,35 @@
+:root {
+  color-scheme: light dark;
+  font:
+    13px/1.4 system-ui,
+    sans-serif;
+}
+body {
+  margin: 0;
+  padding: 12px;
+  min-width: 320px;
+}
+fieldset {
+  border: 1px solid #8884;
+  margin: 8px 0;
+}
+label {
+  display: block;
+  margin: 4px 0;
+}
+.badge {
+  font-weight: 600;
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: #8882;
+}
+.badge-success {
+  background: #2a7a2a33;
+}
+.badge-failed,
+.badge-needsAuth {
+  background: #a3333333;
+}
+.detail {
+  color: #a33;
+}
