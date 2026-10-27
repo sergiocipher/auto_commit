@@ -1,9 +1,13 @@
-import { describePeriod, PLATFORM_DISPLAY } from "@cst/shared";
+import { describePeriod, PLATFORM_DISPLAY, type Platform } from "@cst/shared";
 import type { PopupState } from "../background/handler.js";
 import { deriveStatus, STATUS_LABELS } from "./status.js";
 
 /** Read-only status view. All platform-derived strings are rendered as text. */
-export function StatusPanel(props: { state: PopupState; onRetry: (key?: string) => void }) {
+export function StatusPanel(props: {
+  state: PopupState;
+  onRetry: (key?: string) => void;
+  onRetryUpload?: (platform: Platform, submissionId: string) => void;
+}) {
   const { state } = props;
   const latest = state.activity[0];
   const status = deriveStatus(latest);
@@ -21,6 +25,17 @@ export function StatusPanel(props: { state: PopupState; onRetry: (key?: string) 
         </p>
       )}
       {latest?.detail && <p className="detail">{latest.detail}</p>}
+      {latest && (status === "failed" || status === "needsAuth") && props.onRetryUpload && (
+        <button
+          type="button"
+          onClick={() => props.onRetryUpload?.(latest.platform, latest.submissionId)}
+        >
+          Retry upload
+        </button>
+      )}
+      {!state.github.connected && (
+        <p className="detail">GitHub is not connected. Open Settings to connect.</p>
+      )}
       <p>Period: {describePeriod(state.settings.period)}</p>
       <p>Uploaded (recent): {uploaded}</p>
       {state.outbox.length > 0 && (

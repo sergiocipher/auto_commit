@@ -1,4 +1,5 @@
 import { api } from "../ui/api.js";
+import { GitHubPanel } from "../ui/GitHubPanel.js";
 import { SettingsForm } from "../ui/SettingsForm.js";
 import { useAppState } from "../ui/useAppState.js";
 
@@ -14,10 +15,12 @@ export function App() {
     <main>
       <h1>Coding Submission Tracker — Settings</h1>
       {error && <p className="detail">{error}</p>}
+      {state && <GitHubPanel status={state.github} onChange={refresh} />}
       {state ? (
         <SettingsForm
           key={JSON.stringify(state.settings)}
           initial={state.settings}
+          githubConnected={state.github.connected}
           onSave={async (s) => {
             await api.saveSettings(s);
           }}

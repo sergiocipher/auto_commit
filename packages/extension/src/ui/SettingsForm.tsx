@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { api } from "./api.js";
+import type { RepoSummary } from "../background/githubAuth.js";
 import {
   PLATFORM_DISPLAY,
   PLATFORMS,
@@ -24,7 +26,11 @@ function periodFor(kind: PeriodPolicy["kind"], prev: PeriodPolicy): PeriodPolicy
   return { kind };
 }
 
-export function SettingsForm(props: { initial: Settings; onSave: (s: Settings) => Promise<void> }) {
+export function SettingsForm(props: {
+  initial: Settings;
+  githubConnected: boolean;
+  onSave: (s: Settings) => Promise<void>;
+}) {
   const [draft, setDraft] = useState<Settings>(props.initial);
   const [message, setMessage] = useState<string>("");
   const set = (patch: Partial<Settings>) => setDraft((d) => ({ ...d, ...patch }));
@@ -131,6 +137,13 @@ export function SettingsForm(props: { initial: Settings; onSave: (s: Settings) =
       </fieldset>
       <fieldset>
         <legend>Repository</legend>
+        {props.githubConnected && (
+          <RepoPicker
+            value={draft.repo}
+            onPick={(repo) => set({ repo })}
+            onError={(m) => setMessage(m)}
+          />
+        )}
         <input
           placeholder="owner"
           value={draft.repo.owner}
@@ -150,5 +163,59 @@ export function SettingsForm(props: { initial: Settings; onSave: (s: Settings) =
       <button type="submit">Save settings</button>
       {message && <p role="status">{message}</p>}
     </form>
+  );
+}
+
+function RepoPicker(props: {
+  value: Settings["repo"];
+  onPick: (repo: Settings["repo"]) => void;
+  onError: (message: string) => void;
+}) {
+  const [repos, setRepos] = useState<RepoSummary[] | null>(null);
+  const [branches, setBranches] = useState<string[]>([]);
+  const fail = (e: unknown) =>
+    props.onError(e instanceof Error ? e.message : "GitHub request failed.");
+
+  async function pickRepo(fullName: string) {
+    const repo = repos?.find((r) => `${r.owner}/${r.name}` === fullName);
+    if (!repo) return;
+    props.onPick({ owner: repo.owner, name: repo.name, branch: repo.defaultBranch });
+    api.branches(repo.owner, repo.name).then(setBranches, fail);
+  }
+
+  if (!repos) {
+    return (
+      <button type="button" onClick={() => api.repos().then(setRepos, fail)}>
+        Load my repositories
+      </button>
+    );
+  }
+  return (
+    <div>
+      <select
+        value={`${props.value.owner}/${props.value.name}`}
+        onChange={(e) => void pickRepo(e.target.value)}
+      >
+        <option value="/">Choose a repository…</option>
+        {repos.map((r) => (
+          <option key={`${r.owner}/${r.name}`} value={`${r.owner}/${r.name}`}>
+            {r.owner}/{r.name}
+            {r.private ? " (private)" : ""}
+          </option>
+        ))}
+      </select>
+      {branches.length > 0 && (
+        <select
+          value={props.value.branch}
+          onChange={(e) => props.onPick({ ...props.value, branch: e.target.value })}
+        >
+          {branches.map((b) => (
+            <option key={b} value={b}>
+              {b}
+            </option>
+          ))}
+        </select>
+      )}
+    </div>
   );
 }
