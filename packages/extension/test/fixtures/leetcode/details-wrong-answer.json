@@ -1,0 +1,19 @@
+{
+  "_synthetic": true,
+  "_note": "Hand-built from the documented /check/ shape; not recorded traffic. See docs/platforms/leetcode.md.",
+  "data": {
+    "submissionDetails": {
+      "code": "class Solution:\r\n\tdef twoSum(self, nums: List[int], target: int) -> List[int]:  \n\t\tseen = {}  # café ✓\n\t\tfor i, n in enumerate(nums):\n\t\t\tif target - n in seen:\n\t\t\t\treturn [seen[target - n], i]\n\t\t\tseen[n] = i\n",
+      "timestamp": 1700000000,
+      "statusCode": 11,
+      "lang": {
+        "name": "python3",
+        "verboseName": "Python3"
+      },
+      "question": {
+        "questionId": "1",
+        "titleSlug": "two-sum"
+      }
+    }
+  }
+}

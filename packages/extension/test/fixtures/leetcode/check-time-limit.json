@@ -1,0 +1,16 @@
+{
+  "_synthetic": true,
+  "_note": "Hand-built from the documented /check/ shape; not recorded traffic. See docs/platforms/leetcode.md.",
+  "status_code": 14,
+  "status_msg": "Time Limit Exceeded",
+  "lang": "python3",
+  "pretty_lang": "Python3",
+  "run_success": true,
+  "question_id": "1",
+  "task_finish_time": 1700000000123,
+  "finished": true,
+  "submission_id": "1234567890",
+  "state": "SUCCESS",
+  "status_runtime": "52 ms",
+  "status_memory": "16.5 MB"
+}
