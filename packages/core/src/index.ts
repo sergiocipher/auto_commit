@@ -6,3 +6,6 @@ export * from "./jobs.js";
 export * from "./validate.js";
 export * from "./dedup.js";
 export * from "./kvJobStore.js";
+export * from "./github/client.js";
+export * from "./github/metadata.js";
+export * from "./github/uploader.js";
