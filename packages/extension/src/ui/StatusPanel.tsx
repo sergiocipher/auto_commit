@@ -1,6 +1,5 @@
-import { PLATFORM_DISPLAY } from "@cst/shared";
+import { describePeriod, PLATFORM_DISPLAY } from "@cst/shared";
 import type { PopupState } from "../background/handler.js";
-import { describePeriod } from "./period.js";
 import { deriveStatus, STATUS_LABELS } from "./status.js";
 
 /** Read-only status view. All platform-derived strings are rendered as text. */
