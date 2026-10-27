@@ -1,0 +1,26 @@
+{
+  "_synthetic": true,
+  "_note": "Built around the fields CodeChef's IDE client reads (docs/platforms/codechef.md); other fields assumed.",
+  "languages": [
+    {
+      "id": "63",
+      "short_name": "C++17",
+      "full_name": "C++ 17"
+    },
+    {
+      "id": "116",
+      "short_name": "PYTH 3",
+      "full_name": "Python 3"
+    },
+    {
+      "id": "10",
+      "short_name": "JAVA",
+      "full_name": "Java"
+    },
+    {
+      "id": "999",
+      "short_name": "WEIRD",
+      "full_name": "Befunge 98"
+    }
+  ]
+}
