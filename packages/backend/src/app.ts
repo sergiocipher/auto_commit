@@ -87,10 +87,11 @@ export function createApp(deps: AppDeps) {
   // Access log: method, path, status, duration. Never bodies or headers.
   app.use((req, res, next) => {
     const start = Date.now();
+    const path = req.path; // routers rewrite req.path; keep the full one
     res.on("finish", () =>
       deps.log.info("request", {
         method: req.method,
-        path: req.path,
+        path,
         status: res.statusCode,
         ms: Date.now() - start,
       }),

@@ -380,6 +380,10 @@ describe.skipIf(SKIP)("HTTP API", () => {
       token = saved;
     });
 
+    it("logs full request paths", () => {
+      expect(logs.some((l) => l.includes('"path":"/v1/settings"'))).toBe(true);
+    });
+
     it("never logs tokens, pairing codes or source code", () => {
       const all = logs.join("\n");
       expect(logs.length).toBeGreaterThan(10);
