@@ -98,7 +98,9 @@ const handle = createMessageHandler({
     branches: (owner, name) => listBranches(auth, httpFetch, now, owner, name),
   },
   uploads: {
-    retry: (platform, submissionId) => uploader.retry(platform, submissionId),
+    retry: (platform, submissionId, options) => uploader.retry(platform, submissionId, options),
+    retryFailed: () => uploader.retryFailed(),
+    history: () => uploader.history(),
     onConnected: () => uploader.resumeNeedsAuth(),
     clear: () => jobs.clear(),
   },

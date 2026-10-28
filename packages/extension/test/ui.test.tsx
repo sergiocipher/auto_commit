@@ -70,6 +70,8 @@ describe("StatusPanel", () => {
         }),
       ],
       outbox: [],
+      uploads: [],
+      uploadedCount: 0,
     };
     const html = renderToStaticMarkup(<StatusPanel state={state} onRetry={() => undefined} />);
     expect(html).not.toContain("<img");

@@ -1,7 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { DEFAULT_SETTINGS, sha256Hex } from "@cst/shared";
+import { DEFAULT_SETTINGS, sha256Hex, type Platform } from "@cst/shared";
 import { ActivityLog } from "../src/background/activity.js";
-import { createMessageHandler, type PopupState } from "../src/background/handler.js";
+import {
+  createMessageHandler,
+  MAX_HISTORY_IN_STATE,
+  type PopupState,
+  type UploadSummary,
+} from "../src/background/handler.js";
 import { Outbox } from "../src/background/outbox.js";
 import { SettingsStore } from "../src/background/settings.js";
 import type { ConnectProgress } from "../src/background/githubAuth.js";
@@ -32,7 +37,15 @@ function setup() {
       branches: vi.fn(async () => ["main"]),
     },
     uploads: {
-      retry: vi.fn(async (): Promise<UploadJob | undefined> => undefined),
+      retry: vi.fn(
+        async (
+          _p: Platform,
+          _s: string,
+          _o?: { force?: boolean },
+        ): Promise<UploadJob | undefined> => undefined,
+      ),
+      retryFailed: vi.fn(async () => 2),
+      history: vi.fn(async (): Promise<UploadSummary[]> => []),
       onConnected: vi.fn(async () => undefined),
       clear: vi.fn(async () => undefined),
     },
@@ -317,6 +330,51 @@ describe("github and upload commands", () => {
         pageSender(),
       ),
     ).toEqual({ ok: true, data: "QUEUED" });
+    expect(ctx.deps.uploads.retry).toHaveBeenLastCalledWith("leetcode", "1", { force: false });
+  });
+
+  it("force-uploads a stored submission and retries all failed uploads", async () => {
+    ctx.deps.uploads.retry.mockResolvedValueOnce({ status: "QUEUED" } as UploadJob);
+    expect(
+      await ctx.handle(
+        { type: "upload/force", platform: "codeforces", submissionId: "9" },
+        pageSender(),
+      ),
+    ).toEqual({ ok: true, data: "QUEUED" });
+    expect(ctx.deps.uploads.retry).toHaveBeenLastCalledWith("codeforces", "9", { force: true });
+    expect(await ctx.handle({ type: "upload/retry-failed" }, pageSender())).toEqual({
+      ok: true,
+      data: 2,
+    });
+    expect(ctx.deps.requestDrain).toHaveBeenCalledTimes(2);
+  });
+
+  it("refuses upload commands from content scripts", async () => {
+    for (const msg of [
+      { type: "upload/force", platform: "leetcode", submissionId: "1" },
+      { type: "upload/retry-failed" },
+    ]) {
+      expect(await ctx.handle(msg, contentSender())).toEqual({
+        ok: false,
+        error: "Invalid message.",
+      });
+    }
+    expect(ctx.deps.uploads.retry).not.toHaveBeenCalled();
+    expect(ctx.deps.uploads.retryFailed).not.toHaveBeenCalled();
+  });
+
+  it("caps the history in state but counts every successful upload", async () => {
+    const summary = (i: number, status: UploadSummary["status"]): UploadSummary =>
+      ({ id: `j${i}`, status, sourceStored: false }) as UploadSummary;
+    ctx.deps.uploads.history.mockResolvedValueOnce([
+      ...Array.from({ length: MAX_HISTORY_IN_STATE }, (_, i) => summary(i, "SKIPPED_NOT_ELIGIBLE")),
+      summary(1000, "SUCCESS"),
+      summary(1001, "SUCCESS"),
+    ]);
+    const reply = await ctx.handle({ type: "state/get" }, pageSender());
+    const state = (reply as { data: PopupState }).data;
+    expect(state.uploads).toHaveLength(MAX_HISTORY_IN_STATE);
+    expect(state.uploadedCount).toBe(2);
   });
 
   it("clear local data also clears stored upload jobs; disconnect deletes the token", async () => {

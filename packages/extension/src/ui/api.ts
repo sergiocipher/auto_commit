@@ -18,6 +18,9 @@ export const api = {
     call<undefined>(key ? { type: "outbox/retry", key } : { type: "outbox/retry" }),
   retryUpload: (platform: Platform, submissionId: string) =>
     call<UploadStatus>({ type: "upload/retry", platform, submissionId }),
+  forceUpload: (platform: Platform, submissionId: string) =>
+    call<UploadStatus>({ type: "upload/force", platform, submissionId }),
+  retryFailedUploads: () => call<number>({ type: "upload/retry-failed" }),
   clearData: () => call<undefined>({ type: "data/clear" }),
   /** Must run inside a user gesture: asks Chrome for the optional GitHub host access first. */
   async connectGitHub(): Promise<ConnectProgress> {
