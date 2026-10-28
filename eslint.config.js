@@ -35,5 +35,64 @@ export default tseslint.config(
       ],
     },
   },
+  {
+    // Platform-derived strings are rendered as text only (spec §10).
+    files: ["packages/extension/src/**"],
+    rules: {
+      "no-eval": "error",
+      "no-implied-eval": "error",
+      "no-new-func": "error",
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector: "JSXAttribute[name.name='dangerouslySetInnerHTML']",
+          message: "Render platform-derived strings as text.",
+        },
+        {
+          selector:
+            "AssignmentExpression > MemberExpression.left[property.name=/^(innerHTML|outerHTML)$/]",
+          message: "Render platform-derived strings as text.",
+        },
+        {
+          selector: "CallExpression[callee.property.name=/^(insertAdjacentHTML|write|writeln)$/]",
+          message: "Render platform-derived strings as text.",
+        },
+      ],
+    },
+  },
+  {
+    // Content scripts and adapters run next to platform pages: no access to
+    // stored tokens, settings or background state (spec §11).
+    files: ["packages/extension/src/content/**", "packages/extension/src/adapters/**"],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector: "MemberExpression[object.name='chrome'][property.name='storage']",
+          message: "Content scripts must not read extension storage (tokens live there).",
+        },
+        {
+          selector: "JSXAttribute[name.name='dangerouslySetInnerHTML']",
+          message: "Render platform-derived strings as text.",
+        },
+        {
+          selector:
+            "AssignmentExpression > MemberExpression.left[property.name=/^(innerHTML|outerHTML)$/]",
+          message: "Render platform-derived strings as text.",
+        },
+      ],
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["**/storage.js", "**/background/**"],
+              message: "Content scripts must not touch extension storage or background state.",
+            },
+          ],
+        },
+      ],
+    },
+  },
   prettier,
 );
