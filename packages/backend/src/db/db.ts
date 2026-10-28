@@ -4,8 +4,19 @@ import pg from "pg";
 // bigint columns hold epoch milliseconds, which fit exactly in a double.
 pg.types.setTypeParser(pg.types.builtins.INT8, (v) => Number(v));
 
-export function createPool(connectionString: string, max = 10): pg.Pool {
-  return new pg.Pool({ connectionString, max, idleTimeoutMillis: 30_000 });
+/**
+ * A pool that survives Postgres closing idle connections (restart, failover,
+ * pg_terminate_backend). pg reports those as an "error" event on the pool;
+ * without a listener Node treats it as an uncaught exception and the process
+ * dies. The pool drops the broken client and connects anew on the next query.
+ */
+export function createPool(
+  connectionString: string,
+  opts: { max?: number; onIdleError: (err: Error) => void },
+): pg.Pool {
+  const pool = new pg.Pool({ connectionString, max: opts.max ?? 10, idleTimeoutMillis: 30_000 });
+  pool.on("error", opts.onIdleError);
+  return pool;
 }
 
 /**

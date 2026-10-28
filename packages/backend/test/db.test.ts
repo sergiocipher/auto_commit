@@ -3,6 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { ingestSubmission, requeueJob } from "@cst/core";
 import { DEFAULT_SETTINGS } from "@cst/shared";
 import { Cipher, hashSecret } from "../src/crypto.js";
+import { createPool } from "../src/db/db.js";
 import { loadMigrations, migrate, migrationsApplied } from "../src/db/migrate.js";
 import { PgJobStore } from "../src/db/jobStore.js";
 import {
@@ -206,6 +207,26 @@ describe.skipIf(SKIP)("PgJobStore", () => {
     expect(await store.countSuccess(U)).toBe(2);
     await store.deleteAllForUser(U);
     expect(await store.listForUser(U)).toEqual([]);
+  });
+});
+
+describe.skipIf(SKIP)("connection pool", () => {
+  it("survives Postgres closing an idle connection and keeps working", async () => {
+    const f = await freshDatabase();
+    const errors: string[] = [];
+    const pool = createPool(f.url, { max: 1, onIdleError: (e) => errors.push(e.message) });
+    try {
+      const { rows } = await pool.query<{ pid: number }>("SELECT pg_backend_pid() AS pid");
+      // As on a Postgres restart: the server terminates the pooled, idle session.
+      await f.pool.query("SELECT pg_terminate_backend($1)", [rows[0]!.pid]);
+      await expect.poll(() => errors.length).toBe(1);
+      expect(errors[0]).toMatch(/terminating connection due to administrator command/);
+      const again = await pool.query<{ ok: number }>("SELECT 1 AS ok");
+      expect(again.rows[0]!.ok).toBe(1);
+    } finally {
+      await pool.end();
+      await f.drop();
+    }
   });
 });
 

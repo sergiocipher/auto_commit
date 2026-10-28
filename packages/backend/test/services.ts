@@ -23,7 +23,8 @@ export async function freshDatabase(opts: { migrated?: boolean } = { migrated: t
   await admin.end();
   const url = new URL(DATABASE_URL!);
   url.pathname = `/${name}`;
-  const pool = createPool(url.toString(), 25);
+  // DROP DATABASE ... WITH (FORCE) in drop() may close connections the pool still holds.
+  const pool = createPool(url.toString(), { max: 25, onIdleError: () => undefined });
   const db = new Db(pool);
   if (opts.migrated !== false) {
     await migrate(pool, await loadMigrations(MIGRATIONS_DIR));

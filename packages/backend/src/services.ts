@@ -18,7 +18,9 @@ export const httpFetch: HttpFetch = (url, init) => fetch(url, init);
 
 /** Everything the api and worker processes share, built from the config. */
 export async function createServices(config: Config, log: Logger) {
-  const pool = createPool(config.databaseUrl);
+  const pool = createPool(config.databaseUrl, {
+    onIdleError: (err) => log.warn("idle database connection closed; will reconnect", { err }),
+  });
   const db = new Db(pool);
   const cipher = new Cipher(config.encryptionKeys, config.currentKeyId);
   const store = new PgJobStore(db);
