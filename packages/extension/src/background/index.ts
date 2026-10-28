@@ -5,6 +5,7 @@ import { chromeLocalStore } from "../storage.js";
 import { ActivityLog } from "./activity.js";
 import { BackendClient, BackendConfigStore, BackendSink, pairBackend } from "./backend.js";
 import { GitHubAuth, listBranches, listRepos } from "./githubAuth.js";
+import { timedFetch } from "./http.js";
 import { createMessageHandler, type GitHubService, type UploadService } from "./handler.js";
 import { LocalUploader } from "./localUploader.js";
 import { Outbox } from "./outbox.js";
@@ -16,7 +17,7 @@ const GITHUB_POLL_ALARM = "github-poll";
 const MIN_ALARM_DELAY_MS = 30_000; // Chrome's minimum alarm granularity
 
 const now = () => Date.now();
-const httpFetch: HttpFetch = (url, init) => fetch(url, init);
+const httpFetch: HttpFetch = timedFetch();
 const store = chromeLocalStore();
 const outbox = new Outbox(store);
 const activity = new ActivityLog(store);

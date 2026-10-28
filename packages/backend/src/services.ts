@@ -7,6 +7,7 @@ import { createPool, Db } from "./db/db.js";
 import { PgJobStore } from "./db/jobStore.js";
 import { loadMigrations, migrate, migrationsApplied, type Migration } from "./db/migrate.js";
 import { ensureUser, InstallsRepo, PgSessionStore, SettingsRepo } from "./db/repos.js";
+import { timedFetch } from "./http/fetch.js";
 import type { Logger } from "./logger.js";
 import { createQueue, enqueue, redisConnection } from "./queue.js";
 
@@ -14,7 +15,7 @@ import { createQueue, enqueue, redisConnection } from "./queue.js";
 export const MIGRATIONS_DIR =
   process.env.MIGRATIONS_DIR ?? join(import.meta.dirname, "..", "migrations");
 
-export const httpFetch: HttpFetch = (url, init) => fetch(url, init);
+export const httpFetch: HttpFetch = timedFetch();
 
 /** Everything the api and worker processes share, built from the config. */
 export async function createServices(config: Config, log: Logger) {
