@@ -16,9 +16,9 @@ Codeforces and CodeChef to your GitHub repo under `data/`.
 
 | Platform   | Status                                                                                                                                             |
 | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| LeetCode   | not started                                                                                                                                        |
+| LeetCode   | implemented, unverified — see [docs/platforms/leetcode.md](docs/platforms/leetcode.md) and [docs/MANUAL_E2E.md](docs/MANUAL_E2E.md#leetcode)       |
 | Codeforces | implemented, unverified — see [docs/platforms/codeforces.md](docs/platforms/codeforces.md) and [docs/MANUAL_E2E.md](docs/MANUAL_E2E.md#codeforces) |
-| CodeChef   | not started                                                                                                                                        |
+| CodeChef   | implemented, unverified — see [docs/platforms/codechef.md](docs/platforms/codechef.md) and [docs/MANUAL_E2E.md](docs/MANUAL_E2E.md#codechef)       |
 
 ## Development
 
