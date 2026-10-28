@@ -3,7 +3,7 @@ import {
   InvalidSubmissionError,
   isRunnable,
   processJob,
-  retryJob,
+  requeueJob,
   type Clock,
   type HttpFetch,
   type KeyValueJobStore,
@@ -102,7 +102,7 @@ export class LocalUploader {
     const job = await this.deps.jobs.findBySubmission(platform, submissionId);
     if (!job) return undefined;
     const settings = await this.deps.settings.get();
-    const next = await retryJob(this.deps.jobs, job, {
+    const next = await requeueJob(this.deps.jobs, job, {
       userId: LOCAL_USER_ID,
       settings,
       now: this.deps.now(),

@@ -38,6 +38,8 @@ export const UPLOAD_STATUSES = [
   "RECEIVED",
   "SKIPPED_DUPLICATE",
   "SKIPPED_NOT_ELIGIBLE",
+  /** Eligible, but auto-upload is off: waits for a manual upload. Holds no reservation. */
+  "HELD",
   "QUEUED",
   "UPLOADING",
   "RETRYING",

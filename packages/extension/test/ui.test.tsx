@@ -27,6 +27,7 @@ describe("deriveStatus", () => {
     expect(deriveStatus(entry({ status: "SKIPPED_NOT_ELIGIBLE" }))).toBe("alreadyUploaded");
     expect(deriveStatus(entry({ status: "FAILED_PERMANENT" }))).toBe("failed");
     expect(deriveStatus(entry({ status: "NEEDS_AUTH" }))).toBe("needsAuth");
+    expect(deriveStatus(entry({ status: "HELD" }))).toBe("accepted");
   });
 
   it("only reports success for a SUCCESS status", () => {
