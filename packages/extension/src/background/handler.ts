@@ -1,4 +1,4 @@
-import type { UploadJob } from "@cst/core";
+import type { UploadJob, UploadSummary } from "@cst/core";
 import { problemFolder, type Platform, type Settings, type SubmissionEvent } from "@cst/shared";
 import { ContentMessageSchema, PageMessageSchema, type Reply } from "../messages.js";
 import { platformForUrl } from "../platforms.js";
@@ -18,11 +18,7 @@ export interface GitHubService {
   branches(owner: string, name: string): Promise<string[]>;
 }
 
-/** An upload job as exposed to the popup: never includes source code. */
-export type UploadSummary = Omit<UploadJob, "event"> & {
-  /** Whether the source is still held, i.e. the job can be uploaded or forced. */
-  sourceStored: boolean;
-};
+export type { UploadSummary } from "@cst/core";
 
 /** Upload-job operations; implemented by LocalUploader in local mode. */
 export interface UploadService {

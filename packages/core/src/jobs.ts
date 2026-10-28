@@ -40,6 +40,17 @@ export const UploadJobSchema = z.strictObject({
 });
 export type UploadJob = z.infer<typeof UploadJobSchema>;
 
+/** An upload job as shown to UIs: never includes source code. */
+export const UploadSummarySchema = UploadJobSchema.omit({ event: true }).extend({
+  /** Whether the source is still held, i.e. the job can be uploaded or forced. */
+  sourceStored: z.boolean(),
+});
+export type UploadSummary = z.infer<typeof UploadSummarySchema>;
+
+export function summarizeJob({ event, ...rest }: UploadJob): UploadSummary {
+  return { ...rest, sourceStored: event !== undefined };
+}
+
 /** Statuses that hold the problem's slot for the window (the reservation). */
 export const RESERVING_STATUSES: readonly UploadStatus[] = [
   "RECEIVED",

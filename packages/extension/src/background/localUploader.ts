@@ -4,13 +4,14 @@ import {
   isRunnable,
   processJob,
   requeueJob,
+  summarizeJob,
   type Clock,
   type HttpFetch,
   type KeyValueJobStore,
   type UploadJob,
 } from "@cst/core";
 import type { SubmissionEvent } from "@cst/shared";
-import type { UploadSummary } from "./handler.js";
+import type { UploadSummary } from "@cst/core";
 import type { DeliveryResult } from "./outbox.js";
 import type { SettingsStore } from "./settings.js";
 
@@ -131,10 +132,7 @@ export class LocalUploader {
 
   /** Upload history, newest first, without source code. */
   async history(): Promise<UploadSummary[]> {
-    return (await this.deps.jobs.list()).map(({ event, ...rest }) => ({
-      ...rest,
-      sourceStored: event !== undefined,
-    }));
+    return (await this.deps.jobs.list()).map(summarizeJob);
   }
 
   /** After reconnecting GitHub, resume every job that was waiting for auth. */
