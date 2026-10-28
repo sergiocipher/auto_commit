@@ -74,6 +74,15 @@ export async function createPipeline(start = 1_700_000_005_000) {
       onConnected: () => uploader.resumeNeedsAuth(),
       clear: () => jobs.clear(),
     },
+    // Local mode: never paired.
+    backend: {
+      status: async () => ({ paired: false }),
+      pair: async () => {
+        throw new Error("not used");
+      },
+      unpair: async () => undefined,
+      pushSettings: async () => undefined,
+    },
   });
   return {
     gh,

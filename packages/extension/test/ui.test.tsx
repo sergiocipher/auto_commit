@@ -80,6 +80,7 @@ describe("StatusPanel", () => {
       outbox: [],
       uploads: [],
       uploadedCount: 0,
+      backend: { paired: false },
     };
     const html = renderToStaticMarkup(<StatusPanel state={state} onRetry={() => undefined} />);
     expect(html).not.toContain("<img");
@@ -122,6 +123,7 @@ const baseState = (patch: Partial<PopupState> = {}): PopupState => ({
   outbox: [],
   uploads: [],
   uploadedCount: 0,
+  backend: { paired: false },
   ...patch,
 });
 

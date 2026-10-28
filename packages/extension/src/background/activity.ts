@@ -123,7 +123,7 @@ export class ActivityLog {
   }
 
   /** Mirrors an upload job's state (local uploader or, later, the backend). */
-  recordJob(job: UploadJob, now: number): Promise<void> {
+  recordJob(job: Omit<UploadJob, "event">, now: number): Promise<void> {
     const key = submissionKey(job.platform, job.submissionId);
     return this.update(key, now, (e) => ({
       ...e,
