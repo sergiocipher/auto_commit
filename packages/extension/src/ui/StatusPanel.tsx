@@ -1,17 +1,21 @@
 import { describePeriod, PLATFORM_DISPLAY, type Platform } from "@cst/shared";
 import type { PopupState } from "../background/handler.js";
+import { periodResetsAt, repoUrl } from "./history.js";
 import { deriveStatus, STATUS_LABELS } from "./status.js";
 
-/** Read-only status view. All platform-derived strings are rendered as text. */
+/** Current status summary. All platform-derived strings are rendered as text. */
 export function StatusPanel(props: {
   state: PopupState;
   onRetry: (key?: string) => void;
   onRetryUpload?: (platform: Platform, submissionId: string) => void;
+  /** Injected for tests; defaults to the current time. */
+  now?: number;
 }) {
   const { state } = props;
   const latest = state.activity[0];
   const status = deriveStatus(latest);
-  const uploaded = state.activity.filter((e) => e.status === "SUCCESS").length;
+  const resetsAt = periodResetsAt(state.settings, props.now ?? Date.now());
+  const repo = repoUrl(state.settings.repo);
   return (
     <section className="status">
       <p className={`badge badge-${status}`} data-testid="status">
@@ -36,8 +40,29 @@ export function StatusPanel(props: {
       {!state.github.connected && (
         <p className="detail">GitHub is not connected. Open Settings to connect.</p>
       )}
-      <p>Period: {describePeriod(state.settings.period)}</p>
-      <p>Uploaded (recent): {uploaded}</p>
+      {!state.settings.autoUpload && (
+        <p>Auto-upload is off: accepted solutions wait for “Upload now” below.</p>
+      )}
+      <p>
+        Period: {describePeriod(state.settings.period)}
+        {resetsAt !== null &&
+          ` · resets ${new Date(resetsAt).toLocaleString(undefined, {
+            timeZone: state.settings.timezone,
+            dateStyle: "medium",
+            timeStyle: "short",
+          })} (${state.settings.timezone})`}
+      </p>
+      <p>
+        Uploaded: {state.uploadedCount}
+        {repo && (
+          <>
+            {" · "}
+            <a href={repo} target="_blank" rel="noreferrer">
+              Open repository
+            </a>
+          </>
+        )}
+      </p>
       {state.outbox.length > 0 && (
         <div>
           <p>Pending ({state.outbox.length}):</p>
@@ -53,19 +78,6 @@ export function StatusPanel(props: {
             Retry now
           </button>
         </div>
-      )}
-      {state.activity.length > 0 && (
-        <details>
-          <summary>Recent history</summary>
-          <ul>
-            {state.activity.map((e) => (
-              <li key={e.key}>
-                {PLATFORM_DISPLAY[e.platform]} — {e.problemTitle || e.problemKey || e.submissionId}:{" "}
-                {e.status ?? e.verdict}
-              </li>
-            ))}
-          </ul>
-        </details>
       )}
     </section>
   );
