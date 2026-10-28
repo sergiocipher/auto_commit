@@ -15,7 +15,8 @@ const Bool = z
 
 const EnvSchema = z.object({
   PORT: z.coerce.number().int().min(1).max(65535).default(8787),
-  HOST: z.string().min(1).default("0.0.0.0"),
+  /** Localhost by default (spec §11); compose sets 0.0.0.0 inside the container network. */
+  HOST: z.string().min(1).default("127.0.0.1"),
   DATABASE_URL: z.string().min(1, "is required"),
   REDIS_URL: z.string().min(1, "is required"),
   GITHUB_CLIENT_ID: z.string().default(""),

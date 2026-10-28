@@ -132,6 +132,12 @@ export function createApp(deps: AppDeps) {
   });
 
   const v1 = express.Router();
+  // Replies can carry a bearer token (pairing) or private history: never cache or sniff them.
+  v1.use((_req, res, next) => {
+    res.setHeader("Cache-Control", "no-store");
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    next();
+  });
   v1.use(rateLimit({ windowMs: 60_000, max: deps.rateLimitPerMinute ?? 300 }));
   // Accepted source is at most 1 MB of characters; allow for JSON escaping.
   v1.use(express.json({ limit: "4mb", strict: true }));
