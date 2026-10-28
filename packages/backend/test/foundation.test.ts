@@ -23,6 +23,7 @@ describe("loadConfig", () => {
       purgeSourceOnSuccess: true,
       currentKeyId: "k1",
       logLevel: "info",
+      host: "127.0.0.1",
     });
     expect(c.encryptionKeys.get("k1")).toHaveLength(32);
   });

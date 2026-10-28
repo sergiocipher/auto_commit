@@ -175,6 +175,8 @@ describe.skipIf(SKIP)("HTTP API", () => {
       secrets.push(code);
       const first = await call("POST", "/v1/pair", { code });
       expect(first.status).toBe(201);
+      expect(first.headers.get("cache-control")).toBe("no-store");
+      expect(first.headers.get("x-content-type-options")).toBe("nosniff");
       secrets.push(first.json.token as string);
       expect((await call("POST", "/v1/pair", { code })).status).toBe(401);
     });

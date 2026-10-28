@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { api } from "./api.js";
+import { formatOverrides, parseOverrides } from "./languageOverrides.js";
 import type { RepoSummary } from "../background/githubAuth.js";
 import {
   PLATFORM_DISPLAY,
@@ -33,10 +34,21 @@ export function SettingsForm(props: {
 }) {
   const [draft, setDraft] = useState<Settings>(props.initial);
   const [message, setMessage] = useState<string>("");
+  const [overridesText, setOverridesText] = useState(() =>
+    formatOverrides(props.initial.languageExtensionOverrides),
+  );
+  const parsedOverrides = parseOverrides(overridesText);
   const set = (patch: Partial<Settings>) => setDraft((d) => ({ ...d, ...patch }));
 
   async function save() {
-    const parsed = SettingsSchema.safeParse(draft);
+    if (!parsedOverrides.ok) {
+      setMessage(`Language extensions: ${parsedOverrides.error}`);
+      return;
+    }
+    const parsed = SettingsSchema.safeParse({
+      ...draft,
+      languageExtensionOverrides: parsedOverrides.overrides,
+    });
     if (!parsed.success) {
       setMessage(
         `Invalid settings: ${parsed.error.issues.map((i) => i.path.join(".")).join(", ")}`,
@@ -159,6 +171,20 @@ export function SettingsForm(props: {
           value={draft.repo.branch}
           onChange={(e) => set({ repo: { ...draft.repo, branch: e.target.value.trim() } })}
         />
+      </fieldset>
+      <fieldset>
+        <legend>Language extensions</legend>
+        <p>
+          For a language the extension does not know, one line per language as the site shows it,
+          e.g. <code>GNU G++20 13.2 = cpp</code>.
+        </p>
+        <textarea
+          rows={3}
+          value={overridesText}
+          onChange={(e) => setOverridesText(e.target.value)}
+          aria-invalid={!parsedOverrides.ok}
+        />
+        {!parsedOverrides.ok && <p className="detail">{parsedOverrides.error}</p>}
       </fieldset>
       <button type="submit">Save settings</button>
       {message && <p role="status">{message}</p>}
