@@ -100,7 +100,7 @@ built-in editor (e.g. `/problems/FLOW001`).
 | H4  | A problem with subtasks: get a **partially** correct result.                  | Nothing uploaded.                                                                                                                                                                            |
 | H5  | Submit inside a contest (`/<CONTEST>/problems/<CODE>`).                       | Uploads with `contest.kind = "contest"` in `metadata.json`.                                                                                                                                  |
 | H6  | Open an old submission (`/viewsolution/<id>`) or "My Submissions".            | Nothing uploaded.                                                                                                                                                                            |
-| H7  | Submit, then reload the page before the verdict arrives.                      | Not captured (known limitation; force upload in stage 5).                                                                                                                                    |
+| H7  | Submit, then reload the page before the verdict arrives.                      | Not captured (known limitation; force upload cannot help, it only acts on stored submissions).                                                                                               |
 
 ### Confirm the endpoints (needed to move CodeChef to `verified`)
 
@@ -116,3 +116,20 @@ have not been seen with a real account. In DevTools → Network while doing H2:
 4. `GET /api/ide/PRACTICE/languages/<CODE>`: entries have `id`,
    `short_name` and `full_name`, and the `id` matches the submitted `language`.
 5. Sanitize before sharing: remove `csrfToken`, cookies and usernames.
+
+## Upload policies and history
+
+Any platform works; LeetCode is the quickest. Start from a problem with no
+upload in the current period.
+
+| #   | Step                                                                                                      | Expected                                                                                                                                                  |
+| --- | --------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| P1  | Settings → untick **Auto-upload** → Save. Submit an accepted solution.                                    | Popup: "Submission accepted", note "Auto-upload is off". History row "Waiting for manual upload" with **Upload now** and **Force upload**. No new commit. |
+| P2  | Click **Upload now**.                                                                                     | Row becomes "Uploaded" with the file path and a **commit** link that opens the right commit. "Uploaded" count goes up by one.                             |
+| P3  | Re-enable auto-upload. Submit another accepted solution to the same problem.                              | Row "Already uploaded this period" with **Force upload**. No new commit.                                                                                  |
+| P4  | Click **Force upload**, confirm the dialog.                                                               | Row "Uploaded (forced)". New commit adds `solution-<submissionId>.<ext>`; the first file is unchanged.                                                    |
+| P5  | Look at P4's row and P2's row.                                                                            | Uploaded rows have no Upload or Force button, so an uploaded submission is never committed twice.                                                         |
+| P6  | Settings → Upload period **rolling 24h** → Save. Submit accepted again on the same problem.               | Skipped (less than 24 h since the last upload).                                                                                                           |
+| P7  | Settings → **calendar week**, Sunday vs Monday start; check the popup's "resets …" time.                  | Reset time is the next week start at local midnight in your timezone.                                                                                     |
+| P8  | Choose a repository you cannot write to (or rename the repo on GitHub), submit accepted on a new problem. | Row "Failed" with an actionable message, **Retry** and **Retry all failed**. Fix the repo, click **Retry all failed**: uploads once.                      |
+| P9  | **Open repository** link in the popup.                                                                    | Opens the configured solutions repo.                                                                                                                      |

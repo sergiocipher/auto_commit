@@ -256,3 +256,29 @@ assumptions, so the adapter stays "implemented, unverified". See
   visible to every page script, are never stored or logged, and never leave
   the content script.
 - Assessment-preview submits are ignored.
+
+## 2026-10-28 — Auto-upload off, manual and force upload
+
+- `autoUpload: false` records an eligible accepted submission as `HELD`
+  (a status added to the spec's list) instead of queueing it. HELD keeps
+  the source but reserves nothing, so it never blocks other submissions.
+  Ineligible submissions are still `SKIPPED_NOT_ELIGIBLE`. Alternative
+  rejected: reusing `SKIPPED_NOT_ELIGIBLE` for held jobs, which would make
+  "already uploaded" and "waiting for you" look the same.
+- One core operation, `requeueJob`, puts a stored job back in the queue:
+  retry (failed, needs-auth, retrying), "Upload now" (held) and force
+  (held, skipped, failed). Without `force` the period is re-checked; with
+  it the period is ignored. The stored submission goes through the
+  accepted/source gate again either way, and a forced job stays forced on
+  later retries. SUCCESS, queued and uploading jobs are never requeued.
+- Force upload only works on submissions the extension stored. A
+  submission that was never captured (page reloaded or closed before the
+  verdict) cannot be force-uploaded. Platform docs corrected accordingly.
+- Skipped and held jobs keep their source code so they can be forced
+  later. Together they are capped at 500 records (oldest pruned first);
+  "Clear local data" removes them all.
+- Changing the period applies to decisions made after the change; past
+  decisions are not re-evaluated.
+- The popup history reads the job store (newest 100, no source code) and
+  the uploaded count counts every stored SUCCESS. Commit and repository
+  links are built only from GitHub-safe names and 40-hex SHAs.
