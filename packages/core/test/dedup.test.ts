@@ -232,6 +232,31 @@ describe("ingestSubmission", () => {
   });
 });
 
+describe("reservationBucket", () => {
+  it("records the calendar bucket an unforced queued job reserves", async () => {
+    const store = newStore();
+    const queued = await ingestSubmission(store, await makeEvent(), opts());
+    expect(queued.job.reservationBucket).toBe("day:2024-03-10");
+    const held = await ingestSubmission(
+      store,
+      await makeEvent({ submissionId: "2" }),
+      opts(T0, { hold: true }),
+    );
+    expect(held.job.reservationBucket).toBeUndefined();
+    const forced = await requeueJob(store, held.job, opts(T0, { force: true }));
+    expect(forced.reservationBucket).toBeUndefined();
+  });
+
+  it("has no bucket for duration policies", async () => {
+    const store = newStore();
+    const r = await ingestSubmission(store, await makeEvent(), {
+      ...opts(),
+      settings: { period: { kind: "rolling_24h" }, timezone: "UTC" },
+    });
+    expect(r.job.reservationBucket).toBeUndefined();
+  });
+});
+
 describe("requeueJob", () => {
   it("requeues a failed job when still eligible", async () => {
     const store = newStore();

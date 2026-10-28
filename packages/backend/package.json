@@ -1,0 +1,27 @@
+{
+  "name": "@cst/backend",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.test.json",
+    "build": "node scripts/build.mjs",
+    "migrate": "node dist/cli.js migrate",
+    "start:api": "node dist/cli.js api",
+    "start:worker": "node dist/cli.js worker"
+  },
+  "dependencies": {
+    "@cst/core": "^0.0.0",
+    "@cst/shared": "^0.0.0",
+    "bullmq": "^5.81.5",
+    "express": "^5.3.0",
+    "ioredis": "^5.11.1",
+    "pg": "^8.23.1",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/pg": "^8.23.1",
+    "esbuild": "^0.28.2"
+  }
+}

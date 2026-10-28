@@ -3,7 +3,12 @@ import type { GitHubStatus } from "../background/githubAuth.js";
 import { api } from "./api.js";
 
 /** Device-flow sign-in. The token never reaches this page; only status does. */
-export function GitHubPanel(props: { status: GitHubStatus; onChange: () => void }) {
+export function GitHubPanel(props: {
+  status: GitHubStatus;
+  onChange: () => void;
+  /** Backend mode: the backend holds the token, so no browser GitHub access is requested. */
+  viaBackend?: boolean;
+}) {
   const [code, setCode] = useState<{ userCode: string; verificationUri: string } | null>(
     props.status.pending
       ? {
@@ -55,7 +60,7 @@ export function GitHubPanel(props: { status: GitHubStatus; onChange: () => void 
   async function connect() {
     setMessage("");
     try {
-      const p = await api.connectGitHub();
+      const p = await api.connectGitHub({ viaBackend: props.viaBackend ?? false });
       if (p.state === "pending") {
         setCode({ userCode: p.userCode, verificationUri: p.verificationUri });
         schedulePoll(p.retryInMs);
@@ -74,6 +79,7 @@ export function GitHubPanel(props: { status: GitHubStatus; onChange: () => void 
   return (
     <fieldset>
       <legend>GitHub</legend>
+      {props.viaBackend && <p>Signed in through your backend; the token is stored there.</p>}
       {props.status.connected ? (
         <>
           <p>

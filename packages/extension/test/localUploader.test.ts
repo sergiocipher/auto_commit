@@ -174,7 +174,10 @@ describe("LocalUploader", () => {
     const t = await setup({ token: TOKEN, autoUpload: false });
     await t.uploader.deliver(await makeEvent({ sourceCode: "SECRET_SOURCE_MARKER" }));
     const history = await t.uploader.history();
-    expect(history).toEqual([expect.objectContaining({ status: "HELD", sourceStored: true })]);
+    expect(history).toEqual({
+      uploads: [expect.objectContaining({ status: "HELD", sourceStored: true })],
+      uploadedCount: 0,
+    });
     expect(JSON.stringify(history)).not.toContain("SECRET_SOURCE_MARKER");
   });
 });

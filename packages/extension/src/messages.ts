@@ -50,6 +50,12 @@ export const PageMessageSchema = z.discriminatedUnion("type", [
     submissionId: z.string().min(1).max(100),
   }),
   z.strictObject({ type: z.literal("upload/retry-failed") }),
+  z.strictObject({
+    type: z.literal("backend/pair"),
+    url: z.string().min(1).max(100),
+    code: z.string().min(8).max(64),
+  }),
+  z.strictObject({ type: z.literal("backend/unpair") }),
 ]);
 export type PageMessage = z.infer<typeof PageMessageSchema>;
 

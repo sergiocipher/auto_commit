@@ -29,10 +29,27 @@ export const UploadJobSchema = z.strictObject({
   commitSha: z.string().optional(),
   uploadedAt: z.number().optional(),
   lastError: z.string().optional(),
+  /**
+   * Window bucket an unforced reserving job holds (calendar and permanent
+   * policies). Lets a database enforce one reservation per bucket with a
+   * unique index; duration policies rely on the per-problem lock alone.
+   */
+  reservationBucket: z.string().optional(),
   /** Held until SUCCESS (then purged unless configured otherwise). */
   event: SubmissionEventSchema.optional(),
 });
 export type UploadJob = z.infer<typeof UploadJobSchema>;
+
+/** An upload job as shown to UIs: never includes source code. */
+export const UploadSummarySchema = UploadJobSchema.omit({ event: true }).extend({
+  /** Whether the source is still held, i.e. the job can be uploaded or forced. */
+  sourceStored: z.boolean(),
+});
+export type UploadSummary = z.infer<typeof UploadSummarySchema>;
+
+export function summarizeJob({ event, ...rest }: UploadJob): UploadSummary {
+  return { ...rest, sourceStored: event !== undefined };
+}
 
 /** Statuses that hold the problem's slot for the window (the reservation). */
 export const RESERVING_STATUSES: readonly UploadStatus[] = [

@@ -1,4 +1,5 @@
 import { api } from "../ui/api.js";
+import { BackendPanel } from "../ui/BackendPanel.js";
 import { GitHubPanel } from "../ui/GitHubPanel.js";
 import { SettingsForm } from "../ui/SettingsForm.js";
 import { useAppState } from "../ui/useAppState.js";
@@ -6,7 +7,11 @@ import { useAppState } from "../ui/useAppState.js";
 export function App() {
   const { state, error, refresh } = useAppState();
   async function clearData() {
-    if (!confirm("Clear pending uploads and history stored in this browser? Settings are kept."))
+    if (
+      !confirm(
+        "Clear pending uploads and history stored in this browser (and in the backend, if paired)? Settings are kept.",
+      )
+    )
       return;
     await api.clearData();
     refresh();
@@ -15,7 +20,10 @@ export function App() {
     <main>
       <h1>Coding Submission Tracker — Settings</h1>
       {error && <p className="detail">{error}</p>}
-      {state && <GitHubPanel status={state.github} onChange={refresh} />}
+      {state && <BackendPanel status={state.backend} onChange={refresh} />}
+      {state && (
+        <GitHubPanel status={state.github} onChange={refresh} viaBackend={state.backend.paired} />
+      )}
       {state ? (
         <SettingsForm
           key={JSON.stringify(state.settings)}

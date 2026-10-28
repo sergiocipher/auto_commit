@@ -1,10 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { DEFAULT_SETTINGS, sha256Hex, type Platform } from "@cst/shared";
+import { DEFAULT_SETTINGS, sha256Hex, type Platform, type Settings } from "@cst/shared";
 import { ActivityLog } from "../src/background/activity.js";
 import {
   createMessageHandler,
   MAX_HISTORY_IN_STATE,
+  type BackendStatus,
   type PopupState,
+  type UploadHistory,
   type UploadSummary,
 } from "../src/background/handler.js";
 import { Outbox } from "../src/background/outbox.js";
@@ -45,9 +47,18 @@ function setup() {
         ): Promise<UploadJob | undefined> => undefined,
       ),
       retryFailed: vi.fn(async () => 2),
-      history: vi.fn(async (): Promise<UploadSummary[]> => []),
+      history: vi.fn(async (): Promise<UploadHistory> => ({ uploads: [], uploadedCount: 0 })),
       onConnected: vi.fn(async () => undefined),
       clear: vi.fn(async () => undefined),
+    },
+    backend: {
+      status: vi.fn(async (): Promise<BackendStatus> => ({ paired: false })),
+      pair: vi.fn(async (url: string, _code: string): Promise<BackendStatus> => ({
+        paired: true,
+        url,
+      })),
+      unpair: vi.fn(async () => undefined),
+      pushSettings: vi.fn(async (_s: Settings) => undefined),
     },
   };
   return { deps, handle: createMessageHandler(deps), store };
@@ -363,18 +374,73 @@ describe("github and upload commands", () => {
     expect(ctx.deps.uploads.retryFailed).not.toHaveBeenCalled();
   });
 
-  it("caps the history in state but counts every successful upload", async () => {
+  it("caps the history in state and reports the service's success count", async () => {
     const summary = (i: number, status: UploadSummary["status"]): UploadSummary =>
       ({ id: `j${i}`, status, sourceStored: false }) as UploadSummary;
-    ctx.deps.uploads.history.mockResolvedValueOnce([
-      ...Array.from({ length: MAX_HISTORY_IN_STATE }, (_, i) => summary(i, "SKIPPED_NOT_ELIGIBLE")),
-      summary(1000, "SUCCESS"),
-      summary(1001, "SUCCESS"),
-    ]);
+    ctx.deps.uploads.history.mockResolvedValueOnce({
+      uploads: Array.from({ length: MAX_HISTORY_IN_STATE + 5 }, (_, i) => summary(i, "SUCCESS")),
+      uploadedCount: 321,
+    });
     const reply = await ctx.handle({ type: "state/get" }, pageSender());
     const state = (reply as { data: PopupState }).data;
     expect(state.uploads).toHaveLength(MAX_HISTORY_IN_STATE);
-    expect(state.uploadedCount).toBe(2);
+    expect(state.uploadedCount).toBe(321);
+    expect(state.backend).toEqual({ paired: false });
+  });
+
+  it("still answers state when the backend is unreachable", async () => {
+    ctx.deps.uploads.history.mockRejectedValueOnce(new Error("down"));
+    ctx.deps.github.status.mockRejectedValueOnce(new Error("down"));
+    const reply = await ctx.handle({ type: "state/get" }, pageSender());
+    expect(reply.ok).toBe(true);
+    const state = (reply as { data: PopupState }).data;
+    expect(state.github).toEqual({ connected: false });
+    expect(state.uploads).toEqual([]);
+  });
+
+  it("pairs, unpairs and pushes saved settings to the backend", async () => {
+    const paired = await ctx.handle(
+      { type: "backend/pair", url: "http://127.0.0.1:8787", code: "abcdefghijkl" },
+      pageSender(),
+    );
+    expect(paired).toEqual({ ok: true, data: { paired: true, url: "http://127.0.0.1:8787" } });
+    expect(ctx.deps.requestDrain).toHaveBeenCalled();
+    await ctx.handle({ type: "settings/update", settings: DEFAULT_SETTINGS }, pageSender());
+    expect(ctx.deps.backend.pushSettings).toHaveBeenCalledWith(
+      expect.objectContaining({ period: DEFAULT_SETTINGS.period }),
+    );
+    expect(await ctx.handle({ type: "backend/unpair" }, pageSender())).toEqual({
+      ok: true,
+      data: undefined,
+    });
+    expect(
+      await ctx.handle({ type: "backend/pair", url: "x", code: "abcdefghijkl" }, contentSender()),
+    ).toEqual({ ok: false, error: "Invalid message." });
+  });
+
+  it("reports backend errors on pair and settings push, keeping local settings", async () => {
+    const err = Object.assign(new Error("Invalid or expired pairing code."), {
+      name: "BackendError",
+    });
+    ctx.deps.backend.pair.mockRejectedValueOnce(err);
+    expect(
+      await ctx.handle(
+        { type: "backend/pair", url: "http://127.0.0.1:8787", code: "abcdefghijkl" },
+        pageSender(),
+      ),
+    ).toEqual({ ok: false, error: "Invalid or expired pairing code." });
+    ctx.deps.backend.pushSettings.mockRejectedValueOnce(
+      Object.assign(new Error("Backend is not reachable."), { name: "BackendError" }),
+    );
+    const saved = await ctx.handle(
+      { type: "settings/update", settings: { ...DEFAULT_SETTINGS, timezone: "Asia/Kolkata" } },
+      pageSender(),
+    );
+    expect(saved).toEqual({
+      ok: false,
+      error: "Saved here, but the backend did not take it: Backend is not reachable.",
+    });
+    expect((await ctx.deps.settings.get()).timezone).toBe("Asia/Kolkata");
   });
 
   it("clear local data also clears stored upload jobs; disconnect deletes the token", async () => {

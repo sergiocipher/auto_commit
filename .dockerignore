@@ -1,0 +1,22 @@
+# Only package manifests, sources and migrations are needed (see Dockerfile).
+**/node_modules
+**/dist
+**/coverage
+**/test-results
+.git
+.github
+.husky
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.log
+docs
+README.md
+AGENT_PROMPT.md
+agent.md
+packages/*/test
+packages/extension/src
+packages/extension/public
+packages/extension/scripts

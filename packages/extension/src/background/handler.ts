@@ -1,4 +1,4 @@
-import type { UploadJob } from "@cst/core";
+import type { UploadJob, UploadSummary } from "@cst/core";
 import { problemFolder, type Platform, type Settings, type SubmissionEvent } from "@cst/shared";
 import { ContentMessageSchema, PageMessageSchema, type Reply } from "../messages.js";
 import { platformForUrl } from "../platforms.js";
@@ -18,11 +18,26 @@ export interface GitHubService {
   branches(owner: string, name: string): Promise<string[]>;
 }
 
-/** An upload job as exposed to the popup: never includes source code. */
-export type UploadSummary = Omit<UploadJob, "event"> & {
-  /** Whether the source is still held, i.e. the job can be uploaded or forced. */
-  sourceStored: boolean;
-};
+export type { UploadSummary } from "@cst/core";
+
+export interface UploadHistory {
+  uploads: UploadSummary[];
+  uploadedCount: number;
+}
+
+/** Pairing with a self-hosted backend (backend mode). */
+export interface BackendControl {
+  status(): Promise<BackendStatus>;
+  pair(url: string, code: string): Promise<BackendStatus>;
+  unpair(): Promise<void>;
+  /** Pushes saved settings to the backend; no-op in local mode. */
+  pushSettings(settings: Settings): Promise<void>;
+}
+
+export interface BackendStatus {
+  paired: boolean;
+  url?: string;
+}
 
 /** Upload-job operations; implemented by LocalUploader in local mode. */
 export interface UploadService {
@@ -34,8 +49,8 @@ export interface UploadService {
   ): Promise<UploadJob | undefined>;
   /** Retries every failed or needs-auth job; returns how many were queued. */
   retryFailed(): Promise<number>;
-  /** All jobs, newest first. */
-  history(): Promise<UploadSummary[]>;
+  /** Recent jobs, newest first, plus the count of all successful uploads. */
+  history(): Promise<UploadHistory>;
   /** Resume jobs that were waiting for GitHub auth. */
   onConnected(): Promise<void>;
   /** Removes stored jobs (part of "clear local data"). */
@@ -51,6 +66,7 @@ export interface HandlerDeps {
   sha256: (text: string) => Promise<string>;
   github: GitHubService;
   uploads: UploadService;
+  backend: BackendControl;
   /** Kicks off delivery of due outbox items and due uploads (fire-and-forget). */
   requestDrain: () => void;
 }
@@ -75,6 +91,7 @@ export interface PopupState {
   uploads: UploadSummary[];
   /** Every successful upload still on record (not limited to the history shown). */
   uploadedCount: number;
+  backend: BackendStatus;
 }
 
 export const MAX_HISTORY_IN_STATE = 100;
@@ -115,7 +132,9 @@ async function userFacing<T>(fn: () => Promise<T>): Promise<Reply<T>> {
   } catch (err) {
     const known =
       err instanceof Error &&
-      (err.name === "UploadError" || err.message === "GitHub is not connected.");
+      (err.name === "UploadError" ||
+        err.name === "BackendError" ||
+        err.message === "GitHub is not connected.");
     return { ok: false, error: known ? err.message : "GitHub request failed." };
   }
 }
@@ -160,12 +179,14 @@ export function createMessageHandler(deps: HandlerDeps) {
       const msg = parsed.data;
       switch (msg.type) {
         case "state/get": {
+          const backend = await deps.backend.status();
+          // A busy or unreachable backend must not break the popup.
           const [settings, activity, items, github, history] = await Promise.all([
             deps.settings.get(),
             deps.activity.list(),
             deps.outbox.list(),
-            deps.github.status(),
-            deps.uploads.history(),
+            deps.github.status().catch((): GitHubStatus => ({ connected: false })),
+            deps.uploads.history().catch((): UploadHistory => ({ uploads: [], uploadedCount: 0 })),
           ]);
           const outbox: OutboxSummary[] = items.map((i) => ({
             key: i.key,
@@ -181,13 +202,30 @@ export function createMessageHandler(deps: HandlerDeps) {
             github,
             activity,
             outbox,
-            uploads: history.slice(0, MAX_HISTORY_IN_STATE),
-            uploadedCount: history.filter((u) => u.status === "SUCCESS").length,
+            uploads: history.uploads.slice(0, MAX_HISTORY_IN_STATE),
+            uploadedCount: history.uploadedCount,
+            backend,
           };
           return { ok: true, data: state };
         }
-        case "settings/update":
-          return { ok: true, data: await deps.settings.set(msg.settings) };
+        case "settings/update": {
+          const saved = await deps.settings.set(msg.settings);
+          const pushed = await userFacing(() => deps.backend.pushSettings(saved));
+          if (!pushed.ok)
+            return {
+              ok: false,
+              error: `Saved here, but the backend did not take it: ${pushed.error}`,
+            };
+          return { ok: true, data: saved };
+        }
+        case "backend/pair": {
+          const reply = await userFacing(() => deps.backend.pair(msg.url, msg.code));
+          if (reply.ok) deps.requestDrain();
+          return reply;
+        }
+        case "backend/unpair":
+          await deps.backend.unpair();
+          return { ok: true, data: undefined };
         case "outbox/retry":
           await deps.outbox.retryNow(deps.now(), msg.key);
           deps.requestDrain();

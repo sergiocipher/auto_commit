@@ -282,3 +282,47 @@ assumptions, so the adapter stays "implemented, unverified". See
 - The popup history reads the job store (newest 100, no source code) and
   the uploaded count counts every stored SUCCESS. Commit and repository
   links are built only from GitHub-safe names and 40-hex SHAs.
+
+## 2026-10-28 — Backend (stage 6)
+
+- **BullMQ job id** is `<platform>-<encodeURIComponent(submissionId)>`:
+  BullMQ rejects `:` in custom ids, so the spec's `platform:submissionId`
+  cannot be used. Platform names contain no `-`, so the id is unambiguous
+  and duplicate enqueues still collapse.
+- **Retries reuse the queue job** (`moveToDelayed` + `DelayedError`) rather
+  than adding jobs, so the deterministic id is never blocked by an active
+  job. Queue jobs are removed on completion; Postgres keeps the history.
+- **A row found `UPLOADING` is claimed again.** BullMQ runs one instance per
+  job id, so a re-delivered job means the previous attempt died; the
+  uploader is idempotent (identical content → no commit).
+- **Reservation index**: unforced reserving jobs store the window bucket
+  (`reservationBucket`, calendar and permanent policies). A partial unique
+  index on (user, platform, problem, bucket) backs up the advisory lock.
+  Duration policies have no fixed bucket and rely on the lock alone.
+- **Timestamps that core uses are `bigint` epoch ms** so rows map 1:1 to
+  `UploadJob`; bookkeeping columns use `timestamptz`.
+- **Pairing**: one-time codes come from `cli.js pair` (operator terminal,
+  never the service log), expire after 10 minutes and are stored hashed.
+  Alternative rejected: an unauthenticated "first caller wins" pairing,
+  which any local process could race.
+- **Single user**: every install maps to user `local`; `user_id` columns
+  exist for later multi-user support (spec §2).
+- **CORS**: browser requests from any origin other than `EXTENSION_ORIGIN`
+  get 403. Requests without an `Origin` header (curl, health checks) are not
+  browser requests and go on to bearer auth.
+- **Token encryption**: AES-256-GCM, random IV, key id per record, user id
+  as associated data. Old keys can be listed for rotation. A token that no
+  longer decrypts counts as "not connected" (jobs wait in `NEEDS_AUTH`).
+- **API additions**: `GET /v1/github` (status) and
+  `POST /v1/uploads/retry-failed` for the popup; force upload takes
+  `{platform, submissionId}` as in the spec.
+- **Bundling**: the workspace packages export TypeScript sources, so the
+  backend is bundled with esbuild; npm dependencies stay external and the
+  runtime image installs production dependencies only.
+- **Extension modes**: pairing switches new submissions, history and the
+  GitHub connection to the backend; jobs created before pairing still finish
+  locally. Backend URLs are limited to `http://127.0.0.1` and
+  `http://localhost` (the manifest's host permissions).
+- **Compose**: required variables fail interpolation when unset; containers
+  run read-only with `no-new-privileges`; only the API port is published, on
+  `127.0.0.1` by default.

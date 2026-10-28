@@ -11,3 +11,4 @@ export * from "./github/client.js";
 export * from "./github/metadata.js";
 export * from "./github/uploader.js";
 export * from "./kvJobStore.js";
+export * from "./github/session.js";
