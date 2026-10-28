@@ -1,6 +1,7 @@
 import {
   describePeriod,
   isEligible,
+  periodBucket,
   type Platform,
   type Settings,
   type SubmissionEvent,
@@ -66,6 +67,15 @@ function notEligibleMessage(settings: Pick<Settings, "period">): string {
   return `Already uploaded during this period (${describePeriod(settings.period)}).`;
 }
 
+function reservationBucket(
+  settings: Pick<Settings, "period" | "timezone">,
+  submittedAt: number,
+  force: boolean,
+): string | undefined {
+  if (force) return undefined;
+  return periodBucket(settings.period, submittedAt, settings.timezone) ?? undefined;
+}
+
 function blockingTimes(jobs: UploadJob[], exceptId?: string): number[] {
   return jobs
     .filter(
@@ -103,6 +113,7 @@ export async function ingestSubmission(
           nextAttemptAt: opts.now,
           updatedAt: opts.now,
           lastError: undefined,
+          reservationBucket: undefined,
         };
         await store.update(job);
         return { decision: "requeued", job };
@@ -138,7 +149,12 @@ export async function ingestSubmission(
       force,
       createdAt: opts.now,
       updatedAt: opts.now,
-      ...(status === "QUEUED" ? { nextAttemptAt: opts.now } : {}),
+      ...(status === "QUEUED"
+        ? {
+            nextAttemptAt: opts.now,
+            reservationBucket: reservationBucket(opts.settings, event.submittedAt, force),
+          }
+        : {}),
       ...(status === "HELD" ? { lastError: HELD_MESSAGE } : {}),
       ...(status === "SKIPPED_NOT_ELIGIBLE"
         ? { lastError: notEligibleMessage(opts.settings) }
@@ -204,12 +220,14 @@ export async function requeueJob(
           attempts: 0,
           nextAttemptAt: opts.now,
           lastError: undefined,
+          reservationBucket: reservationBucket(opts.settings, current.submittedAt, force),
           updatedAt: opts.now,
         }
       : {
           ...current,
           status: "SKIPPED_NOT_ELIGIBLE",
           nextAttemptAt: undefined,
+          reservationBucket: undefined,
           lastError: notEligibleMessage(opts.settings),
           updatedAt: opts.now,
         };

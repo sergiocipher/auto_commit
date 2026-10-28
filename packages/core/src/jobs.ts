@@ -29,6 +29,12 @@ export const UploadJobSchema = z.strictObject({
   commitSha: z.string().optional(),
   uploadedAt: z.number().optional(),
   lastError: z.string().optional(),
+  /**
+   * Window bucket an unforced reserving job holds (calendar and permanent
+   * policies). Lets a database enforce one reservation per bucket with a
+   * unique index; duration policies rely on the per-problem lock alone.
+   */
+  reservationBucket: z.string().optional(),
   /** Held until SUCCESS (then purged unless configured otherwise). */
   event: SubmissionEventSchema.optional(),
 });
