@@ -18,9 +18,24 @@ export interface GitHubService {
   branches(owner: string, name: string): Promise<string[]>;
 }
 
+/** An upload job as exposed to the popup: never includes source code. */
+export type UploadSummary = Omit<UploadJob, "event"> & {
+  /** Whether the source is still held, i.e. the job can be uploaded or forced. */
+  sourceStored: boolean;
+};
+
 /** Upload-job operations; implemented by LocalUploader in local mode. */
 export interface UploadService {
-  retry(platform: Platform, submissionId: string): Promise<UploadJob | undefined>;
+  /** Retry, manual upload of a held job, or with `force`, upload despite the period. */
+  retry(
+    platform: Platform,
+    submissionId: string,
+    options?: { force?: boolean },
+  ): Promise<UploadJob | undefined>;
+  /** Retries every failed or needs-auth job; returns how many were queued. */
+  retryFailed(): Promise<number>;
+  /** All jobs, newest first. */
+  history(): Promise<UploadSummary[]>;
   /** Resume jobs that were waiting for GitHub auth. */
   onConnected(): Promise<void>;
   /** Removes stored jobs (part of "clear local data"). */
@@ -56,7 +71,13 @@ export interface PopupState {
   github: GitHubStatus;
   activity: ActivityEntry[];
   outbox: OutboxSummary[];
+  /** Newest first, at most MAX_HISTORY_IN_STATE entries. */
+  uploads: UploadSummary[];
+  /** Every successful upload still on record (not limited to the history shown). */
+  uploadedCount: number;
 }
+
+export const MAX_HISTORY_IN_STATE = 100;
 
 export type SubmissionOutcome = "queued" | "duplicate" | "platform-disabled";
 
@@ -139,11 +160,12 @@ export function createMessageHandler(deps: HandlerDeps) {
       const msg = parsed.data;
       switch (msg.type) {
         case "state/get": {
-          const [settings, activity, items, github] = await Promise.all([
+          const [settings, activity, items, github, history] = await Promise.all([
             deps.settings.get(),
             deps.activity.list(),
             deps.outbox.list(),
             deps.github.status(),
+            deps.uploads.history(),
           ]);
           const outbox: OutboxSummary[] = items.map((i) => ({
             key: i.key,
@@ -154,7 +176,15 @@ export function createMessageHandler(deps: HandlerDeps) {
             nextAttemptAt: i.nextAttemptAt,
             lastError: i.lastError,
           }));
-          return { ok: true, data: { settings, github, activity, outbox } satisfies PopupState };
+          const state: PopupState = {
+            settings,
+            github,
+            activity,
+            outbox,
+            uploads: history.slice(0, MAX_HISTORY_IN_STATE),
+            uploadedCount: history.filter((u) => u.status === "SUCCESS").length,
+          };
+          return { ok: true, data: state };
         }
         case "settings/update":
           return { ok: true, data: await deps.settings.set(msg.settings) };
@@ -165,11 +195,19 @@ export function createMessageHandler(deps: HandlerDeps) {
         case "data/clear":
           await Promise.all([deps.outbox.clear(), deps.activity.clear(), deps.uploads.clear()]);
           return { ok: true, data: undefined };
-        case "upload/retry": {
-          const job = await deps.uploads.retry(msg.platform, msg.submissionId);
+        case "upload/retry":
+        case "upload/force": {
+          const job = await deps.uploads.retry(msg.platform, msg.submissionId, {
+            force: msg.type === "upload/force",
+          });
           if (!job) return { ok: false, error: "No upload found for that submission." };
           deps.requestDrain();
           return { ok: true, data: job.status };
+        }
+        case "upload/retry-failed": {
+          const queued = await deps.uploads.retryFailed();
+          deps.requestDrain();
+          return { ok: true, data: queued };
         }
         case "github/device/start":
           return await userFacing(() => deps.github.start());

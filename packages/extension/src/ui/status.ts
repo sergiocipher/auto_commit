@@ -27,6 +27,8 @@ export function deriveStatus(latest: ActivityEntry | undefined): StatusKey {
       return "failed";
     case "NEEDS_AUTH":
       return "needsAuth";
+    case "HELD":
+      return "accepted";
     case "RECEIVED":
     case "QUEUED":
     case "UPLOADING":

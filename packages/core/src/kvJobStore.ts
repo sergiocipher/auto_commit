@@ -11,7 +11,11 @@ export interface KeyValue {
 }
 
 export const JOBS_STORAGE_KEY = "jobs:v1";
-/** Skipped records beyond this many are pruned (oldest first). SUCCESS records are kept: they drive dedup. */
+/**
+ * Skipped and held records beyond this many are pruned (oldest first), which
+ * also bounds how much held source code is kept. SUCCESS records are kept:
+ * they drive dedup.
+ */
 export const MAX_SKIPPED_JOBS = 500;
 
 type Chain = Promise<unknown>;
@@ -56,7 +60,10 @@ export class KeyValueJobStore implements DedupStore {
 
   private async save(jobs: UploadJob[]): Promise<void> {
     const skipped = jobs.filter(
-      (j) => j.status === "SKIPPED_NOT_ELIGIBLE" || j.status === "SKIPPED_DUPLICATE",
+      (j) =>
+        j.status === "SKIPPED_NOT_ELIGIBLE" ||
+        j.status === "SKIPPED_DUPLICATE" ||
+        j.status === "HELD",
     );
     let pruned = jobs;
     if (skipped.length > MAX_SKIPPED_JOBS) {

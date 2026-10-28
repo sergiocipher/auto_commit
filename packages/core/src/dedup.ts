@@ -4,9 +4,10 @@ import {
   type Platform,
   type Settings,
   type SubmissionEvent,
+  type UploadStatus,
 } from "@cst/shared";
 import { RESERVING_STATUSES, type UploadJob } from "./jobs.js";
-import { assertUploadable } from "./validate.js";
+import { assertUploadable, InvalidSubmissionError } from "./validate.js";
 
 /**
  * Persistence the dedup engine needs. Backends: chrome.storage (extension
@@ -31,6 +32,8 @@ export type IngestDecision =
   | { decision: "queued"; job: UploadJob }
   /** New job recorded as not eligible in the current window. */
   | { decision: "skipped"; job: UploadJob }
+  /** New eligible job waiting for a manual upload (auto-upload off). */
+  | { decision: "held"; job: UploadJob }
   /** Same submission seen before; nothing new created. */
   | { decision: "existing"; job: UploadJob }
   /** Force upload revived a skipped/failed job for the same submission. */
@@ -43,6 +46,24 @@ export interface IngestOptions {
   newId: () => string;
   /** Bypass the period window; never bypasses accepted/source/idempotency checks. */
   force?: boolean;
+  /** Auto-upload is off: record an eligible submission as HELD instead of queueing it. */
+  hold?: boolean;
+}
+
+/** Statuses a stored job can be queued again from (retry, manual or force upload). */
+export const REQUEUEABLE_STATUSES: readonly UploadStatus[] = [
+  "HELD",
+  "SKIPPED_NOT_ELIGIBLE",
+  "SKIPPED_DUPLICATE",
+  "FAILED_PERMANENT",
+  "NEEDS_AUTH",
+  "RETRYING",
+];
+
+const HELD_MESSAGE = "Auto-upload is off; upload it from the extension popup.";
+
+function notEligibleMessage(settings: Pick<Settings, "period">): string {
+  return `Already uploaded during this period (${describePeriod(settings.period)}).`;
 }
 
 function blockingTimes(jobs: UploadJob[], exceptId?: string): number[] {
@@ -68,6 +89,7 @@ export async function ingestSubmission(
     const existing = await store.findBySubmission(event.platform, event.submissionId);
     if (existing) {
       const revivable =
+        existing.status === "HELD" ||
         existing.status === "SKIPPED_NOT_ELIGIBLE" ||
         existing.status === "SKIPPED_DUPLICATE" ||
         existing.status === "FAILED_PERMANENT";
@@ -97,6 +119,11 @@ export async function ingestSubmission(
         event.submittedAt,
         blockingTimes(others),
       );
+    const status: UploadStatus = !eligible
+      ? "SKIPPED_NOT_ELIGIBLE"
+      : opts.hold && !force
+        ? "HELD"
+        : "QUEUED";
     const job: UploadJob = {
       id: opts.newId(),
       userId: opts.userId,
@@ -106,49 +133,63 @@ export async function ingestSubmission(
       submissionId: event.submissionId,
       language: event.language,
       submittedAt: event.submittedAt,
-      status: eligible ? "QUEUED" : "SKIPPED_NOT_ELIGIBLE",
+      status,
       attempts: 0,
       force,
       createdAt: opts.now,
       updatedAt: opts.now,
-      ...(eligible
-        ? { nextAttemptAt: opts.now }
-        : {
-            lastError: `Already uploaded during this period (${describePeriod(opts.settings.period)}).`,
-          }),
+      ...(status === "QUEUED" ? { nextAttemptAt: opts.now } : {}),
+      ...(status === "HELD" ? { lastError: HELD_MESSAGE } : {}),
+      ...(status === "SKIPPED_NOT_ELIGIBLE"
+        ? { lastError: notEligibleMessage(opts.settings) }
+        : {}),
       event,
     };
     await store.insert(job);
-    return { decision: eligible ? "queued" : "skipped", job };
+    const decision = status === "QUEUED" ? "queued" : status === "HELD" ? "held" : "skipped";
+    return { decision, job };
   });
 }
 
 /**
- * Manual retry of a FAILED_PERMANENT or NEEDS_AUTH job. Failed jobs released
- * their reservation, so eligibility is re-checked unless the job was forced.
+ * Queues a stored job again: retry after a failure, manual upload of a HELD
+ * job, or force upload of a skipped one. Only SUCCESS counts toward the
+ * window and failed jobs released their reservation, so eligibility is
+ * re-checked unless `force` is set (or the job was forced before). The
+ * stored submission goes through the accepted/source gate again either way.
+ * Jobs in other states are returned unchanged.
  */
-export async function retryJob(
+export async function requeueJob(
   store: DedupStore,
   job: UploadJob,
-  opts: Omit<IngestOptions, "newId" | "force">,
+  opts: Omit<IngestOptions, "newId" | "hold">,
 ): Promise<UploadJob> {
-  if (job.status !== "FAILED_PERMANENT" && job.status !== "NEEDS_AUTH" && job.status !== "RETRYING")
-    return job;
+  if (!REQUEUEABLE_STATUSES.includes(job.status)) return job;
   return store.withProblemLock(opts.userId, job.platform, job.problemKey, async () => {
     const current = (await store.findBySubmission(job.platform, job.submissionId)) ?? job;
-    if (!current.event) {
+    if (!REQUEUEABLE_STATUSES.includes(current.status)) return current;
+    const fail = async (lastError: string) => {
       const failed: UploadJob = {
         ...current,
         status: "FAILED_PERMANENT",
-        lastError: "Source code is no longer stored; submit again.",
+        nextAttemptAt: undefined,
+        lastError,
         updatedAt: opts.now,
       };
       await store.update(failed);
       return failed;
+    };
+    if (!current.event) return fail("Source code is no longer stored; submit again.");
+    try {
+      await assertUploadable(current.event);
+    } catch (err) {
+      if (err instanceof InvalidSubmissionError) return fail(err.message);
+      throw err;
     }
+    const force = current.force || (opts.force ?? false);
     const others = await store.listByProblem(opts.userId, current.platform, current.problemKey);
     const eligible =
-      current.force ||
+      force ||
       isEligible(
         opts.settings.period,
         opts.settings.timezone,
@@ -159,6 +200,7 @@ export async function retryJob(
       ? {
           ...current,
           status: "QUEUED",
+          force,
           attempts: 0,
           nextAttemptAt: opts.now,
           lastError: undefined,
@@ -167,7 +209,8 @@ export async function retryJob(
       : {
           ...current,
           status: "SKIPPED_NOT_ELIGIBLE",
-          lastError: `Already uploaded during this period (${describePeriod(opts.settings.period)}).`,
+          nextAttemptAt: undefined,
+          lastError: notEligibleMessage(opts.settings),
           updatedAt: opts.now,
         };
     await store.update(next);

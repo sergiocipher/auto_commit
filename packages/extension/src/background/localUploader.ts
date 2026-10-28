@@ -3,13 +3,14 @@ import {
   InvalidSubmissionError,
   isRunnable,
   processJob,
-  retryJob,
+  requeueJob,
   type Clock,
   type HttpFetch,
   type KeyValueJobStore,
   type UploadJob,
 } from "@cst/core";
 import type { SubmissionEvent } from "@cst/shared";
+import type { UploadSummary } from "./handler.js";
 import type { DeliveryResult } from "./outbox.js";
 import type { SettingsStore } from "./settings.js";
 
@@ -46,6 +47,7 @@ export class LocalUploader {
         settings,
         now: this.deps.now(),
         newId: this.deps.newId,
+        hold: !settings.autoUpload,
       });
       return {
         kind: "accepted",
@@ -94,21 +96,45 @@ export class LocalUploader {
     }
   }
 
-  /** Manual retry of a failed / needs-auth / retrying job. */
+  /**
+   * Queues a stored job again: retry (failed / needs-auth / retrying), manual
+   * upload (held), or with `force`, upload even if the period was used up.
+   */
   async retry(
     platform: UploadJob["platform"],
     submissionId: string,
+    options: { force?: boolean } = {},
   ): Promise<UploadJob | undefined> {
     const job = await this.deps.jobs.findBySubmission(platform, submissionId);
     if (!job) return undefined;
     const settings = await this.deps.settings.get();
-    const next = await retryJob(this.deps.jobs, job, {
+    const next = await requeueJob(this.deps.jobs, job, {
       userId: LOCAL_USER_ID,
       settings,
       now: this.deps.now(),
+      force: options.force ?? false,
     });
-    await this.deps.onJob(next);
+    if (next !== job) await this.deps.onJob(next);
     return next;
+  }
+
+  /** Retries every failed or needs-auth job; returns how many were queued. */
+  async retryFailed(): Promise<number> {
+    let queued = 0;
+    for (const job of await this.deps.jobs.list()) {
+      if (job.status !== "FAILED_PERMANENT" && job.status !== "NEEDS_AUTH") continue;
+      const next = await this.retry(job.platform, job.submissionId);
+      if (next?.status === "QUEUED") queued++;
+    }
+    return queued;
+  }
+
+  /** Upload history, newest first, without source code. */
+  async history(): Promise<UploadSummary[]> {
+    return (await this.deps.jobs.list()).map(({ event, ...rest }) => ({
+      ...rest,
+      sourceStored: event !== undefined,
+    }));
   }
 
   /** After reconnecting GitHub, resume every job that was waiting for auth. */

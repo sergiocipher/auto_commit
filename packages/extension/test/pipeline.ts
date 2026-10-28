@@ -7,8 +7,8 @@ import { createMessageHandler } from "../src/background/handler.js";
 import { LocalUploader } from "../src/background/localUploader.js";
 import { Outbox } from "../src/background/outbox.js";
 import { SettingsStore } from "../src/background/settings.js";
-import type { ContentMessage } from "../src/messages.js";
-import { contentSender, EXT_ID, MemoryStore } from "./helpers.js";
+import type { ContentMessage, PageMessage } from "../src/messages.js";
+import { contentSender, EXT_ID, MemoryStore, pageSender } from "./helpers.js";
 
 /**
  * The real service-worker pipeline (handler -> outbox -> local uploader)
@@ -68,7 +68,9 @@ export async function createPipeline(start = 1_700_000_005_000) {
       branches: async () => [],
     },
     uploads: {
-      retry: (p, s) => uploader.retry(p, s),
+      retry: (p, s, o) => uploader.retry(p, s, o),
+      retryFailed: () => uploader.retryFailed(),
+      history: () => uploader.history(),
       onConnected: () => uploader.resumeNeedsAuth(),
       clear: () => jobs.clear(),
     },
@@ -77,6 +79,9 @@ export async function createPipeline(start = 1_700_000_005_000) {
     gh,
     activity,
     jobs,
+    settings,
+    /** A message from the popup or options page. */
+    page: (m: PageMessage) => handle(m, pageSender()),
     /** A content script's sendMessage from a tab at `tabUrl`. */
     sender: (tabUrl: string) => (m: ContentMessage) => handle(m, contentSender(tabUrl)),
     /** Waits for all requested background work to finish. */

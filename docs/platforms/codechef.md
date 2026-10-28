@@ -88,11 +88,11 @@ Only `accepted` uploads. Partial (subtask) acceptance does not count.
 
 ## Limitations / to verify live
 
-| Item                                                                     | Status                                                                   |
-| ------------------------------------------------------------------------ | ------------------------------------------------------------------------ |
-| Exact JSON of `/api/submission-code/<id>` beyond `data.code`             | assumed                                                                  |
-| Whether the GETs need `x-csrf-token`                                     | sent anyway when known                                                   |
-| Reloading the page before the verdict arrives                            | not captured (no submit info); use force upload (stage 5)                |
-| Submissions made outside the IDE page (e.g. old submit form, mobile app) | not captured                                                             |
-| Assessment/skill-test and "lab" problems                                 | ignored (same endpoint, but `assessmentPreviewMode` submits are skipped) |
-| Byte exactness                                                           | depends on what `submission-code` returns; compare per MANUAL_E2E        |
+| Item                                                                     | Status                                                                            |
+| ------------------------------------------------------------------------ | --------------------------------------------------------------------------------- |
+| Exact JSON of `/api/submission-code/<id>` beyond `data.code`             | assumed                                                                           |
+| Whether the GETs need `x-csrf-token`                                     | sent anyway when known                                                            |
+| Reloading the page before the verdict arrives                            | not captured (no submit info); force upload cannot help (stored submissions only) |
+| Submissions made outside the IDE page (e.g. old submit form, mobile app) | not captured                                                                      |
+| Assessment/skill-test and "lab" problems                                 | ignored (same endpoint, but `assessmentPreviewMode` submits are skipped)          |
+| Byte exactness                                                           | depends on what `submission-code` returns; compare per MANUAL_E2E                 |

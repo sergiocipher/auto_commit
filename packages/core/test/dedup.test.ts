@@ -3,7 +3,7 @@ import type { Settings } from "@cst/shared";
 import {
   ingestSubmission,
   InvalidSubmissionError,
-  retryJob,
+  requeueJob,
   type UploadJob,
 } from "../src/index.js";
 import { HOUR, makeEvent, newId, newStore, T0 } from "./helpers.js";
@@ -191,14 +191,53 @@ describe("ingestSubmission", () => {
       (await ingestSubmission(store, await makeEvent(), opts(T0, { force: true }))).decision,
     ).toBe("existing");
   });
+
+  it("holds an eligible submission when auto-upload is off, without reserving the slot", async () => {
+    const store = newStore();
+    const held = await ingestSubmission(store, await makeEvent(), opts(T0, { hold: true }));
+    expect(held.decision).toBe("held");
+    expect(held.job.status).toBe("HELD");
+    expect(held.job.nextAttemptAt).toBeUndefined();
+    expect(held.job.lastError).toMatch(/Auto-upload is off/);
+    expect(held.job.event?.sourceCode).toBeDefined();
+    // A held job does not block a later submission for the same problem.
+    const second = await ingestSubmission(
+      store,
+      await makeEvent({ submissionId: "2" }),
+      opts(T0, { hold: true }),
+    );
+    expect(second.decision).toBe("held");
+  });
+
+  it("still skips an ineligible submission when auto-upload is off", async () => {
+    const store = newStore();
+    const first = await ingestSubmission(store, await makeEvent(), opts());
+    await markSuccess(store, first.job);
+    const r = await ingestSubmission(
+      store,
+      await makeEvent({ submissionId: "2" }),
+      opts(T0, { hold: true }),
+    );
+    expect(r.decision).toBe("skipped");
+  });
+
+  it("force on ingest queues instead of holding", async () => {
+    const store = newStore();
+    const r = await ingestSubmission(
+      store,
+      await makeEvent(),
+      opts(T0, { hold: true, force: true }),
+    );
+    expect(r.job.status).toBe("QUEUED");
+  });
 });
 
-describe("retryJob", () => {
+describe("requeueJob", () => {
   it("requeues a failed job when still eligible", async () => {
     const store = newStore();
     const { job } = await ingestSubmission(store, await makeEvent(), opts());
     await store.update({ ...job, status: "FAILED_PERMANENT", attempts: 6, lastError: "x" });
-    const retried = await retryJob(store, (await store.get(job.id))!, opts(T0 + 1));
+    const retried = await requeueJob(store, (await store.get(job.id))!, opts(T0 + 1));
     expect(retried).toMatchObject({ status: "QUEUED", attempts: 0, nextAttemptAt: T0 + 1 });
     expect(retried.lastError).toBeUndefined();
   });
@@ -209,7 +248,7 @@ describe("retryJob", () => {
     await store.update({ ...a.job, status: "FAILED_PERMANENT" });
     const b = await ingestSubmission(store, await makeEvent({ submissionId: "2" }), opts());
     await markSuccess(store, b.job);
-    const retried = await retryJob(store, (await store.get(a.job.id))!, opts());
+    const retried = await requeueJob(store, (await store.get(a.job.id))!, opts());
     expect(retried.status).toBe("SKIPPED_NOT_ELIGIBLE");
   });
 
@@ -217,6 +256,67 @@ describe("retryJob", () => {
     const store = newStore();
     const { job } = await ingestSubmission(store, await makeEvent(), opts());
     await store.update({ ...job, status: "NEEDS_AUTH" });
-    expect((await retryJob(store, (await store.get(job.id))!, opts())).status).toBe("QUEUED");
+    expect((await requeueJob(store, (await store.get(job.id))!, opts())).status).toBe("QUEUED");
+  });
+
+  it("uploads a held job manually when it is still eligible", async () => {
+    const store = newStore();
+    const { job } = await ingestSubmission(store, await makeEvent(), opts(T0, { hold: true }));
+    const next = await requeueJob(store, job, opts(T0 + 5));
+    expect(next).toMatchObject({ status: "QUEUED", force: false, nextAttemptAt: T0 + 5 });
+    expect(next.lastError).toBeUndefined();
+  });
+
+  it("manual upload of a held job respects a success that happened meanwhile", async () => {
+    const store = newStore();
+    const held = await ingestSubmission(store, await makeEvent(), opts(T0, { hold: true }));
+    const other = await ingestSubmission(store, await makeEvent({ submissionId: "2" }), opts());
+    await markSuccess(store, other.job);
+    expect((await requeueJob(store, held.job, opts())).status).toBe("SKIPPED_NOT_ELIGIBLE");
+  });
+
+  it("force uploads a skipped job, and the forced flag survives later retries", async () => {
+    const store = newStore();
+    const first = await ingestSubmission(store, await makeEvent(), opts());
+    await markSuccess(store, first.job);
+    const skipped = await ingestSubmission(store, await makeEvent({ submissionId: "2" }), opts());
+    expect((await requeueJob(store, skipped.job, opts())).status).toBe("SKIPPED_NOT_ELIGIBLE");
+
+    const forced = await requeueJob(store, skipped.job, opts(T0, { force: true }));
+    expect(forced).toMatchObject({ status: "QUEUED", force: true, id: skipped.job.id });
+    await store.update({ ...forced, status: "FAILED_PERMANENT", lastError: "x" });
+    const retried = await requeueJob(store, (await store.get(forced.id))!, opts());
+    expect(retried).toMatchObject({ status: "QUEUED", force: true });
+  });
+
+  it("re-validates the stored submission before queueing, even when forced", async () => {
+    const store = newStore();
+    const { job } = await ingestSubmission(store, await makeEvent(), opts(T0, { hold: true }));
+    await store.update({ ...job, event: { ...job.event!, sourceCode: "tampered" } });
+    const next = await requeueJob(store, job, opts(T0, { force: true }));
+    expect(next.status).toBe("FAILED_PERMANENT");
+    expect(next.lastError).toMatch(/hash mismatch/);
+  });
+
+  it("fails clearly when the source code is no longer stored", async () => {
+    const store = newStore();
+    const { job } = await ingestSubmission(store, await makeEvent(), opts(T0, { hold: true }));
+    await store.update({ ...job, event: undefined });
+    const next = await requeueJob(store, job, opts(T0, { force: true }));
+    expect(next).toMatchObject({ status: "FAILED_PERMANENT" });
+    expect(next.lastError).toMatch(/no longer stored/);
+  });
+
+  it("leaves successful and in-flight jobs alone", async () => {
+    const store = newStore();
+    const { job } = await ingestSubmission(store, await makeEvent(), opts());
+    expect(await requeueJob(store, job, opts(T0, { force: true }))).toBe(job);
+    await markSuccess(store, job);
+    const done = (await store.get(job.id))!;
+    expect(await requeueJob(store, done, opts(T0, { force: true }))).toBe(done);
+    // A stale snapshot does not override the stored state.
+    expect((await requeueJob(store, { ...done, status: "FAILED_PERMANENT" }, opts())).status).toBe(
+      "SUCCESS",
+    );
   });
 });

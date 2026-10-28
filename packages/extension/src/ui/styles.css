@@ -33,3 +33,26 @@ label {
 .detail {
   color: #a33;
 }
+.history ul {
+  padding-left: 16px;
+}
+.history li {
+  margin: 6px 0;
+}
+.history button {
+  margin-right: 4px;
+}
+.row-status {
+  font-weight: 600;
+}
+.row-SUCCESS {
+  color: #2a7a2a;
+}
+.row-FAILED_PERMANENT,
+.row-NEEDS_AUTH {
+  color: #a33;
+}
+.path {
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+}

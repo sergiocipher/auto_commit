@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { ingestSubmission, KeyValueJobStore, MAX_SKIPPED_JOBS } from "../src/index.js";
+import {
+  ingestSubmission,
+  JOBS_STORAGE_KEY,
+  KeyValueJobStore,
+  MAX_SKIPPED_JOBS,
+} from "../src/index.js";
 import { makeEvent, MemoryKV, newId, T0 } from "./helpers.js";
 
 const opts = {
@@ -42,4 +47,21 @@ describe("KeyValueJobStore", () => {
     expect(all.filter((j) => j.status === "SKIPPED_NOT_ELIGIBLE")).toHaveLength(MAX_SKIPPED_JOBS);
     expect(all.some((j) => j.status === "SUCCESS")).toBe(true);
   }, 30_000);
+
+  it("counts held records toward the prune cap, oldest first", async () => {
+    const kv = new MemoryKV();
+    const store = new KeyValueJobStore(kv);
+    const { job } = await ingestSubmission(store, await makeEvent(), { ...opts, hold: true });
+    const held = Array.from({ length: MAX_SKIPPED_JOBS }, (_, i) => ({
+      ...job,
+      id: `held-${i}`,
+      submissionId: `h${i}`,
+      createdAt: T0 + 1 + i,
+    }));
+    await kv.set(JOBS_STORAGE_KEY, [job, ...held]);
+    await store.update({ ...held[0]!, updatedAt: T0 + 1 }); // any write prunes
+    const all = await store.list();
+    expect(all.filter((j) => j.status === "HELD")).toHaveLength(MAX_SKIPPED_JOBS);
+    expect(all.some((j) => j.id === job.id)).toBe(false);
+  });
 });

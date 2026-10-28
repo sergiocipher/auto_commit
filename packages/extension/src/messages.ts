@@ -44,6 +44,12 @@ export const PageMessageSchema = z.discriminatedUnion("type", [
     platform: PlatformSchema,
     submissionId: z.string().min(1).max(100),
   }),
+  z.strictObject({
+    type: z.literal("upload/force"),
+    platform: PlatformSchema,
+    submissionId: z.string().min(1).max(100),
+  }),
+  z.strictObject({ type: z.literal("upload/retry-failed") }),
 ]);
 export type PageMessage = z.infer<typeof PageMessageSchema>;
 
